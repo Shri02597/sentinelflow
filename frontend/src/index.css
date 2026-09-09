@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+.card {
+  @apply bg-bg-panel border border-slate-800 rounded-xl p-4 shadow-sm;
+}
+
+.badge {
+  @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold;
+}
+
+.badge-LOW { @apply bg-severity-low/20 text-severity-low; }
+.badge-MEDIUM { @apply bg-severity-medium/20 text-severity-medium; }
+.badge-HIGH { @apply bg-severity-high/20 text-severity-high; }
+.badge-CRITICAL { @apply bg-severity-critical/20 text-severity-critical animate-pulse; }

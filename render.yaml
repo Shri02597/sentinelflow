@@ -1,0 +1,38 @@
+services:
+  - type: web
+    name: sentinelflow-backend
+    runtime: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: sentinelflow-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_ALGORITHM
+        value: HS256
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "30"
+      - key: REFRESH_TOKEN_EXPIRE_MINUTES
+        value: "10080"
+      - key: ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      # Set these two after the frontend is deployed to Vercel — they're the
+      # only values Render can't know in advance (Blueprint deploy will pause
+      # asking you to fill these in; you can also set them later and redeploy).
+      - key: CORS_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+
+databases:
+  - name: sentinelflow-db
+    plan: free
+    databaseName: sentinelflow
+    user: sentinelflow
