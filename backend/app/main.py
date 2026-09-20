@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi.errors import RateLimitExceeded
 from slowapi import _rate_limit_exceeded_handler
@@ -43,8 +44,14 @@ def on_startup():
     # For the MVP: create tables directly. Swap for Alembic migrations
     # once the schema stabilizes for production use.
     init_db()
-    from app.services.seed import seed_products
+    from app.services.seed import seed_products, seed_users
     seed_products()
+    seed_users()
+
+
+@app.get("/")
+def root():
+    return RedirectResponse(url="/docs")
 
 
 @app.get("/api/health")

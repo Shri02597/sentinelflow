@@ -34,6 +34,10 @@ DEMO_PRODUCTS = [
 ]
 
 
+from app.models.user import User, UserRole
+from app.security.hashing import hash_password
+
+
 def seed_products():
     db = SessionLocal()
     try:
@@ -44,3 +48,45 @@ def seed_products():
         db.commit()
     finally:
         db.close()
+
+
+def seed_users():
+    db = SessionLocal()
+    try:
+        initial_users = [
+            {
+                "email": "admin@sentinelflow.io",
+                "username": "admin",
+                "password": "AdminPassword123!",
+                "role": UserRole.ADMIN,
+            },
+            {
+                "email": "analyst@sentinelflow.io",
+                "username": "analyst",
+                "password": "AnalystPassword123!",
+                "role": UserRole.ANALYST,
+            },
+            {
+                "email": "user@sentinelflow.io",
+                "username": "demouser",
+                "password": "UserPassword123!",
+                "role": UserRole.USER,
+            },
+        ]
+        for u_data in initial_users:
+            existing = db.query(User).filter(
+                (User.email == u_data["email"]) | (User.username == u_data["username"])
+            ).first()
+            if not existing:
+                user = User(
+                    email=u_data["email"],
+                    username=u_data["username"],
+                    hashed_password=hash_password(u_data["password"]),
+                    role=u_data["role"],
+                    is_active=True,
+                )
+                db.add(user)
+        db.commit()
+    finally:
+        db.close()
+

@@ -13,8 +13,11 @@ export function useSecurityWebSocket(onMessage) {
   const retryRef = useRef(1000)
   const handlerRef = useRef(onMessage)
   handlerRef.current = onMessage
+  const timerRef = useRef(null)
+  const isUnmountedRef = useRef(false)
 
   const connect = useCallback(() => {
+    if (isUnmountedRef.current) return
     const token = localStorage.getItem('sf_access_token')
     if (!token) return
 
@@ -22,6 +25,10 @@ export function useSecurityWebSocket(onMessage) {
     wsRef.current = ws
 
     ws.onopen = () => {
+      if (isUnmountedRef.current) {
+        ws.close()
+        return
+      }
       setConnected(true)
       retryRef.current = 1000
     }
@@ -35,15 +42,22 @@ export function useSecurityWebSocket(onMessage) {
     }
     ws.onclose = () => {
       setConnected(false)
-      setTimeout(connect, retryRef.current)
-      retryRef.current = Math.min(retryRef.current * 2, 15000)
+      if (!isUnmountedRef.current) {
+        timerRef.current = setTimeout(connect, retryRef.current)
+        retryRef.current = Math.min(retryRef.current * 2, 15000)
+      }
     }
     ws.onerror = () => ws.close()
   }, [])
 
   useEffect(() => {
+    isUnmountedRef.current = false
     connect()
-    return () => wsRef.current?.close()
+    return () => {
+      isUnmountedRef.current = true
+      clearTimeout(timerRef.current)
+      wsRef.current?.close()
+    }
   }, [connect])
 
   return { connected }
