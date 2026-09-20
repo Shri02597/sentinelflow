@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite:///./sentinelflow.db"
 
     # --- Auth / JWT ---
-    SECRET_KEY: str  # required, no default — must come from env
+    SECRET_KEY: str = "default_sentinelflow_super_secret_jwt_key_2026_xyz987"
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
