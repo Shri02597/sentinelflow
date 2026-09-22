@@ -56,14 +56,18 @@ class Settings(BaseSettings):
 
     # --- Rate limiting (sensitive endpoints) ---
     RATE_LIMIT_LOGIN_PER_MINUTE: int = 10
-    RATE_LIMIT_REGISTER_PER_MINUTE: int = 5
-    RATE_LIMIT_PASSWORD_PER_MINUTE: int = 5
+    RATE_LIMIT_REGISTER_PER_MINUTE: int = 25
+    RATE_LIMIT_PASSWORD_PER_MINUTE: int = 15
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     @property
     def cors_origins_list(self) -> List[str]:
-        return [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        origins = [o.strip() for o in self.CORS_ORIGINS.split(",") if o.strip()]
+        frontend = (self.FRONTEND_URL or "").strip()
+        if frontend and frontend not in origins:
+            origins.append(frontend)
+        return origins
 
 
 @lru_cache

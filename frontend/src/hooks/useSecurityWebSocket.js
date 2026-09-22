@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000'
+const WS_URL = import.meta.env.VITE_WS_URL || (import.meta.env.PROD ? 'wss://sentinelflow-api-g7p8.onrender.com' : 'ws://localhost:8000')
 
 /**
  * Connects to /ws/security with the current access token and calls
