@@ -26,7 +26,9 @@ class Settings(BaseSettings):
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7
 
     # --- CORS ---
-    CORS_ORIGINS: str = "http://localhost:5173"
+    # In production the Vercel frontend is the primary origin; keeping it in the
+    # default lets the deployed app work without any env-var setup step.
+    CORS_ORIGINS: str = "http://localhost:5173,https://sentinelflow-zeta.vercel.app"
 
     # --- Frontend ---
     FRONTEND_URL: str = "http://localhost:5173"
