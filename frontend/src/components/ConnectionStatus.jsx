@@ -1,48 +1,25 @@
-import { useEffect, useState } from 'react'
-import { useLiveFeed } from '../context/LiveFeedContext.jsx'
+import Icon from './Icon.jsx'
 
-const STYLES = {
-  live: { dot: 'bg-green-400', text: 'text-green-400', label: 'Live' },
-  connecting: { dot: 'bg-yellow-400 animate-pulse', text: 'text-yellow-400', label: 'Connecting' },
-  reconnecting: { dot: 'bg-yellow-400 animate-pulse', text: 'text-yellow-400', label: 'Reconnecting — polling' },
-  offline: { dot: 'bg-red-400', text: 'text-red-400', label: 'Offline' },
-  'auth-failed': { dot: 'bg-red-400', text: 'text-red-400', label: 'Session expired' },
+const STATES = {
+  connected: { label: 'Live', tone: 'text-severity-low', dot: 'bg-severity-low', ring: 'border-severity-low/25 bg-severity-low/10' },
+  connecting: { label: 'Connecting', tone: 'text-severity-medium', dot: 'bg-severity-medium', ring: 'border-severity-medium/25 bg-severity-medium/10' },
+  polling: { label: 'Polling', tone: 'text-severity-medium', dot: 'bg-severity-medium', ring: 'border-severity-medium/25 bg-severity-medium/10' },
+  offline: { label: 'Offline', tone: 'text-severity-critical', dot: 'bg-severity-critical', ring: 'border-severity-critical/25 bg-severity-critical/10' },
 }
 
-/** "3m ago" style freshness for the last successful update. */
-function useAge(timestamp) {
-  const [, tick] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => tick((n) => n + 1), 5000)
-    return () => clearInterval(id)
-  }, [])
-  if (!timestamp) return null
-  const secs = Math.round((Date.now() - timestamp) / 1000)
-  if (secs < 10) return 'just now'
-  if (secs < 60) return `${secs}s ago`
-  const mins = Math.round(secs / 60)
-  return mins < 60 ? `${mins}m ago` : `${Math.round(mins / 60)}h ago`
-}
-
-/**
- * Connection indicator for the console.
- *
- * The important part is that "degraded" is a first-class, labelled state: when
- * the socket is down the dashboard is still being refreshed over REST, and the
- * analyst should be able to tell that apart from a genuinely dead feed rather
- * than wondering whether the numbers are frozen.
- */
-export default function ConnectionStatus({ lastLoadedAt, className = '' }) {
-  const { status } = useLiveFeed()
-  const style = STYLES[status] || STYLES.connecting
-  const age = useAge(lastLoadedAt)
-  const degraded = status !== 'live'
-
+export default function ConnectionStatus({ status = 'connecting', className = '' }) {
+  const s = STATES[status] ?? STATES.connecting
+  const live = status === 'connected'
   return (
-    <div className={`flex items-center gap-2 text-xs ${className}`} title={`Feed status: ${status}`}>
-      <span className={`inline-block h-2 w-2 rounded-full ${style.dot}`} />
-      <span className={style.text}>{style.label}</span>
-      {degraded && age && <span className="text-slate-500">· data from {age}</span>}
+    <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border ${s.ring} ${className}`}>
+      <span className="flex items-center gap-2 min-w-0">
+        <span className="relative shrink-0 flex h-1.5 w-1.5">
+          {live && <span className={`absolute inset-0 rounded-full ${s.dot} animate-ping opacity-70`} />}
+          <span className={`relative h-1.5 w-1.5 rounded-full ${s.dot}`} />
+        </span>
+        <span className={`text-2xs font-semibold uppercase tracking-wider ${s.tone} truncate`}>{s.label}</span>
+      </span>
+      <Icon name="wifi" size={13} className={s.tone} />
     </div>
   )
 }

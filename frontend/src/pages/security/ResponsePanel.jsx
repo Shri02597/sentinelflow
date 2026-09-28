@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getBlocked, raiseResponse, releaseTarget } from '../../services/api.js'
+import { Button } from '../../components/ui.jsx'
+import Icon from '../../components/Icon.jsx'
 
 /**
  * Analyst response controls for a single threat.
@@ -45,11 +47,7 @@ export default function ResponsePanel({ event, onChanged }) {
           reason: reason || 'Released by analyst.',
         })
       } else {
-        await raiseResponse({
-          event_id: event.id,
-          action,
-          reason: reason || undefined,
-        })
+        await raiseResponse({ event_id: event.id, action, reason: reason || undefined })
       }
       setReason('')
       await loadState()
@@ -64,68 +62,67 @@ export default function ResponsePanel({ event, onChanged }) {
   const blocked = blockState?.is_active === true
 
   return (
-    <div className="card space-y-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold text-sm text-slate-300">Response</h3>
+    <div className={`card space-y-3 ${blocked ? 'border-severity-critical/35 shadow-glow-critical' : ''}`}>
+      <div className="card-header">
+        <h2 className="card-title flex items-center gap-2">
+          <Icon name="shield" size={14} className="text-accent" />
+          Response
+        </h2>
         {blocked ? (
-          <span className="text-[10px] px-2 py-0.5 rounded border border-red-800 text-red-300 bg-red-950/40">
-            IP BLOCKED
-          </span>
+          <span className="badge badge-CRITICAL"><Icon name="lock" size={10} />IP Blocked</span>
         ) : (
-          <span className="text-[10px] text-slate-500">no action taken</span>
+          <span className="text-2xs text-slate-500">no action taken</span>
         )}
       </div>
 
       {blocked && (
-        <p className="text-xs text-slate-400">
-          {blockState.reason}
-          <span className="text-slate-600"> · since {new Date(blockState.blocked_at).toLocaleString()}</span>
-        </p>
+        <div className="px-3 py-2.5 rounded-lg bg-severity-critical/8 border border-severity-critical/25">
+          <p className="text-xs text-slate-300">{blockState.reason}</p>
+          <p className="mt-1 font-mono text-2xs text-slate-500">since {new Date(blockState.blocked_at).toLocaleString()}</p>
+        </div>
       )}
 
-      <p className="text-xs text-slate-500">
-        Target: <span className="font-mono text-slate-300">{targetKey}</span>
-        {event.user_id ? ` (account #${event.user_id} affected)` : ' (unauthenticated traffic)'}
-      </p>
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-slate-500">
+        <span>Target</span>
+        <span className="font-mono text-slate-200">{targetKey}</span>
+        <span className="text-slate-700">·</span>
+        <span>{event.user_id ? `account #${event.user_id} affected` : 'unauthenticated traffic'}</span>
+      </div>
 
-      <textarea
-        value={reason}
-        onChange={(e) => setReason(e.target.value)}
-        rows={2}
-        placeholder="Reason for the audit trail (optional — a default is generated)"
-        className="w-full bg-bg-panel2 border border-slate-700 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-accent"
-      />
+      <div>
+        <label className="label">Reason for the audit trail</label>
+        <textarea
+          value={reason}
+          onChange={(e) => setReason(e.target.value)}
+          rows={2}
+          placeholder="Optional — a default is generated if left blank"
+          className="input resize-none"
+        />
+      </div>
 
-      {error && <p className="text-xs text-red-400">{error}</p>}
+      {error && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-severity-critical/10 border border-severity-critical/30">
+          <Icon name="warn" size={13} className="text-severity-critical shrink-0" />
+          <span className="text-2xs text-severity-critical">{error}</span>
+        </div>
+      )}
 
-      <div className="flex gap-2 flex-wrap">
-        <button
-          disabled={busy !== null}
-          onClick={() => act('WARN')}
-          className="px-3 py-1.5 rounded-lg text-xs border border-yellow-800 text-yellow-300 hover:bg-yellow-950/30 disabled:opacity-40"
-        >
+      <div className="flex flex-wrap gap-2">
+        <Button variant="warn" size="sm" disabled={busy !== null} onClick={() => act('WARN')} icon={<Icon name="warn" size={13} />}>
           {busy === 'WARN' ? 'Warning…' : 'Warn account'}
-        </button>
-        <button
-          disabled={busy !== null || blocked}
-          onClick={() => act('BLOCK')}
-          className="px-3 py-1.5 rounded-lg text-xs border border-red-800 text-red-300 hover:bg-red-900/40 disabled:opacity-40"
-        >
+        </Button>
+        <Button variant="danger" size="sm" disabled={busy !== null || blocked} onClick={() => act('BLOCK')} icon={<Icon name="lock" size={13} />}>
           {blocked ? 'Already blocked' : busy === 'BLOCK' ? 'Blocking…' : 'Block this IP'}
-        </button>
+        </Button>
         {blocked && (
-          <button
-            disabled={busy !== null}
-            onClick={() => act('UNBLOCK')}
-            className="px-3 py-1.5 rounded-lg text-xs border border-slate-600 text-slate-300 hover:border-accent disabled:opacity-40"
-          >
+          <Button size="sm" disabled={busy !== null} onClick={() => act('UNBLOCK')} icon={<Icon name="unlock" size={13} />}>
             {busy === 'UNBLOCK' ? 'Releasing…' : 'Release block'}
-          </button>
+          </Button>
         )}
       </div>
 
-      <p className="text-[11px] text-slate-600">
-        Blocking returns <span className="font-mono">403</span> to every request from this IP.
+      <p className="text-2xs leading-relaxed text-slate-600 pt-1 border-t border-line">
+        Blocking returns <span className="font-mono text-slate-400">403</span> to every request from this IP.
         Analysts and admins keep access to this console so a block can always be undone.
       </p>
     </div>

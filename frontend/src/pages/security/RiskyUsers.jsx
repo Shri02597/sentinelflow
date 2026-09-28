@@ -4,9 +4,12 @@ import { getRiskyUsers } from '../../services/api.js'
 import { useLiveFeed } from '../../context/LiveFeedContext.jsx'
 import Badge from '../../components/Badge.jsx'
 import ErrorState from '../../components/ErrorState.jsx'
+import { SectionHeader, Skeleton } from '../../components/ui.jsx'
+import Icon from '../../components/Icon.jsx'
 
 export default function RiskyUsers() {
   const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const { subscribe, pollTick } = useLiveFeed()
 
@@ -17,6 +20,8 @@ export default function RiskyUsers() {
       setError(null)
     } catch {
       setError('Could not load risk data.')
+    } finally {
+      setLoading(false)
     }
   }, [])
 
@@ -27,45 +32,68 @@ export default function RiskyUsers() {
   }), [subscribe, load])
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-4">Top Risky Users / IPs</h1>
-      {error && <ErrorState message={error} onRetry={load} className="mb-4" />}
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-slate-400 text-left border-b border-slate-800">
-            <tr>
-              <th className="py-2 pr-4">User / IP</th>
-              <th className="py-2 pr-4">Risk Score</th>
-              <th className="py-2 pr-4">Risk Level</th>
-              <th className="py-2 pr-4">Threat Count</th>
-              <th className="py-2 pr-4">Latest Event</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r, i) => (
-              <tr key={i} className="border-b border-slate-800/50">
-                <td className="py-2 pr-4">
-                  {r.user_id ? (
-                    <Link to={`/security/users/${r.user_id}/risk`} className="text-accent hover:underline">
-                      user #{r.user_id}
-                    </Link>
-                  ) : (
-                    r.source_ip
-                  )}
-                </td>
-                <td className="py-2 pr-4 font-semibold">{r.risk_score}</td>
-                <td className="py-2 pr-4"><Badge level={r.risk_level} /></td>
-                <td className="py-2 pr-4">{r.threat_count}</td>
-                <td className="py-2 pr-4 text-slate-400">
-                  {r.latest_event ? new Date(r.latest_event).toLocaleString() : '—'}
-                </td>
+    <div className="p-6 lg:p-8 max-w-[1400px]">
+      <SectionHeader title="Top Risky Users & IPs" subtitle="Ranked by accumulated risk score across all detectors" />
+
+      {error && <ErrorState message={error} onRetry={load} className="mb-5" />}
+
+      <div className="card overflow-x-auto p-0">
+        {loading ? (
+          <div className="space-y-2 p-5">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        ) : rows.length === 0 ? (
+          <p className="p-5 text-sm text-slate-500">No risk data yet.</p>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th className="w-10">#</th>
+                <th>User / IP</th>
+                <th>Risk Score</th>
+                <th>Level</th>
+                <th>Threats</th>
+                <th>Latest Event</th>
+                <th />
               </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr><td colSpan={5} className="py-4 text-slate-500 text-center">No risk data yet.</td></tr>
-            )}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {rows.map((r, i) => (
+                <tr key={r.user_id ?? r.source_ip ?? i}>
+                  <td className="font-mono text-2xs text-slate-600">{i + 1}</td>
+                  <td className="font-mono text-xs text-slate-100">
+                    {r.user_id ? (
+                      <Link to={`/security/users/${r.user_id}/risk`} className="link">{`user #${r.user_id}`}</Link>
+                    ) : (
+                      r.source_ip
+                    )}
+                  </td>
+                  <td>
+                    <div className="flex items-center gap-2">
+                      <div className="h-1 w-14 rounded-full bg-bg-raised overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${r.risk_score >= 80 ? 'bg-severity-critical' : r.risk_score >= 60 ? 'bg-severity-high' : r.risk_score >= 40 ? 'bg-severity-medium' : 'bg-slate-500'}`}
+                          style={{ width: `${Math.min(r.risk_score, 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs font-bold tabular-nums text-slate-200">{r.risk_score}</span>
+                    </div>
+                  </td>
+                  <td><Badge level={r.risk_level} /></td>
+                  <td className="font-mono text-xs text-slate-300">{r.threat_count}</td>
+                  <td className="font-mono text-2xs text-slate-500 whitespace-nowrap">
+                    {r.latest_event ? new Date(r.latest_event).toLocaleString() : '—'}
+                  </td>
+                  <td>
+                    {r.user_id && (
+                      <Link to={`/security/users/${r.user_id}/risk`} className="btn btn-ghost btn-sm text-2xs">
+                        <Icon name="eye" size={12} />Profile
+                      </Link>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )

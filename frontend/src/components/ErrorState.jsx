@@ -1,3 +1,5 @@
+import Icon from './Icon.jsx'
+
 /**
  * Rendered when a fetch fails. Without this, a dropped connection looks
  * identical to "no data yet" — an empty table reads as "nothing is wrong",
@@ -5,14 +7,14 @@
  */
 export default function ErrorState({ message = 'Could not load this data.', onRetry, className = '' }) {
   return (
-    <div className={`card border-red-900/60 bg-red-950/20 flex items-center justify-between gap-3 text-sm ${className}`}>
-      <span className="text-red-300">{message}</span>
+    <div className={`flex items-center justify-between gap-3 px-4 py-3 rounded-lg border border-severity-critical/30 bg-severity-critical/8 ${className}`}>
+      <span className="flex items-center gap-2.5 text-xs text-severity-critical min-w-0">
+        <Icon name="warn" size={15} className="shrink-0" />
+        {message}
+      </span>
       {onRetry && (
-        <button
-          onClick={onRetry}
-          className="shrink-0 px-3 py-1 rounded-lg border border-red-800 text-red-300 hover:bg-red-900/40"
-        >
-          Retry
+        <button onClick={onRetry} className="btn btn-danger btn-sm shrink-0">
+          <Icon name="refresh" size={12} />Retry
         </button>
       )}
     </div>

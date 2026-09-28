@@ -2,34 +2,35 @@ import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getBlocked, getResponseActions, releaseTarget } from '../../services/api.js'
 import { useLiveFeed } from '../../context/LiveFeedContext.jsx'
+import { SectionHeader, Skeleton, EmptyState, Button } from '../../components/ui.jsx'
+import ErrorState from '../../components/ErrorState.jsx'
+import Icon from '../../components/Icon.jsx'
 
-/**
- * The containment register: what is currently blocked, and every warn/block/
- * unblock decision ever made, automatic or manual.
- *
- * The audit trail is append-only on the backend, so this page is the
- * authoritative answer to "who blocked this, when, and why" — including
- * actions the auto-response policy took without an analyst present.
- */
+const ACTION_TONE = {
+  BLOCK: 'badge-CRITICAL',
+  WARN: 'badge-MEDIUM',
+  UNBLOCK: 'badge-LOW',
+}
+
 export default function BlockedIdentities() {
   const [blocked, setBlocked] = useState([])
   const [actions, setActions] = useState([])
   const [includeReleased, setIncludeReleased] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [busy, setBusy] = useState(null)
   const { subscribe, pollTick } = useLiveFeed()
 
   const load = useCallback(async () => {
     try {
-      const [b, a] = await Promise.all([
-        getBlocked(includeReleased),
-        getResponseActions({ limit: 50 }),
-      ])
+      const [b, a] = await Promise.all([getBlocked(includeReleased), getResponseActions({ limit: 50 })])
       setBlocked(b.data)
       setActions(a.data)
       setError(null)
     } catch {
       setError('Could not load the containment register.')
+    } finally {
+      setLoading(false)
     }
   }, [includeReleased])
 
@@ -51,99 +52,111 @@ export default function BlockedIdentities() {
     }
   }
 
+  const activeCount = blocked.filter((b) => b.is_active).length
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Containment</h1>
-        <label className="flex items-center gap-2 text-xs text-slate-400">
-          <input
-            type="checkbox"
-            checked={includeReleased}
-            onChange={(e) => setIncludeReleased(e.target.checked)}
-          />
-          Show released
-        </label>
-      </div>
+    <div className="p-6 lg:p-8 max-w-[1400px]">
+      <SectionHeader
+        title="Containment"
+        subtitle="What is blocked right now, and every warn/block/release decision ever made"
+        actions={
+          <label className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-bg-panel border border-line cursor-pointer text-xs text-slate-400 hover:border-line-strong transition">
+            <input type="checkbox" checked={includeReleased} onChange={(e) => setIncludeReleased(e.target.checked)} className="accent-accent" />
+            Show released
+          </label>
+        }
+      />
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && <ErrorState message={error} onRetry={load} className="mb-5" />}
 
-      <div className="card">
-        <h3 className="font-semibold mb-3 text-sm text-slate-300">
-          Blocked targets ({blocked.filter((b) => b.is_active).length} active)
-        </h3>
-        {blocked.length === 0 ? (
-          <p className="text-sm text-slate-500">Nothing is blocked.</p>
-        ) : (
-          <div className="space-y-2">
-            {blocked.map((row) => (
-              <div key={row.id} className="flex items-start justify-between gap-3 border border-slate-800 rounded-lg p-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-mono text-sm">{row.target_key}</span>
-                    <span className="text-[10px] text-slate-500">{row.target_type}</span>
-                    {row.is_active ? (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-red-800 text-red-300 bg-red-950/40">ACTIVE</span>
-                    ) : (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded border border-slate-700 text-slate-400">RELEASED</span>
+      <div className="grid grid-cols-1 xl:grid-cols-5 gap-5">
+        <div className="xl:col-span-2 card">
+          <div className="card-header">
+            <h2 className="card-title flex items-center gap-2">
+              <Icon name="block" size={14} className="text-severity-critical" />
+              Blocked Targets
+            </h2>
+            <span className={activeCount > 0 ? 'badge badge-CRITICAL' : 'badge badge-LOW'}>{activeCount} active</span>
+          </div>
+
+          {loading ? (
+            <div className="space-y-2">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}</div>
+          ) : blocked.length === 0 ? (
+            <EmptyState icon="unlock" title="Nothing is blocked" hint="No source IPs or accounts are currently denied." />
+          ) : (
+            <div className="space-y-2">
+              {blocked.map((row) => (
+                <div key={row.id} className={`px-3.5 py-3 rounded-lg border transition ${row.is_active ? 'border-severity-critical/30 bg-severity-critical/8' : 'border-line bg-bg-sunken/40 opacity-70'}`}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Icon name={row.is_active ? 'lock' : 'unlock'} size={13} className={row.is_active ? 'text-severity-critical' : 'text-slate-500'} />
+                        <span className="font-mono text-sm font-semibold text-slate-100">{row.target_key}</span>
+                        <span className="badge badge-neutral">{row.target_type}</span>
+                        <span className={row.is_active ? 'badge badge-CRITICAL' : 'badge-LOW'}>{row.is_active ? 'Active' : 'Released'}</span>
+                      </div>
+                      <p className="mt-1.5 text-xs leading-relaxed text-slate-400">{row.reason}</p>
+                      <p className="mt-1 font-mono text-2xs text-slate-500">
+                        blocked {new Date(row.blocked_at).toLocaleString()}
+                        {row.released_at && ` · released ${new Date(row.released_at).toLocaleString()}`}
+                        {row.source_event_id && <> · <Link className="link" to={`/security/events/${row.source_event_id}`}>event #{row.source_event_id}</Link></>}
+                      </p>
+                    </div>
+                    {row.is_active && (
+                      <Button size="sm" disabled={busy === row.id} onClick={() => release(row)} icon={<Icon name="unlock" size={12} />} className="shrink-0">
+                        Release
+                      </Button>
                     )}
                   </div>
-                  <p className="text-xs text-slate-400 mt-1">{row.reason}</p>
-                  <p className="text-[11px] text-slate-500 mt-0.5">
-                    Blocked {new Date(row.blocked_at).toLocaleString()}
-                    {row.released_at && ` · released ${new Date(row.released_at).toLocaleString()}`}
-                    {row.source_event_id && (
-                      <>
-                        {' · '}
-                        <Link className="text-accent hover:underline" to={`/security/events/${row.source_event_id}`}>
-                          event #{row.source_event_id}
-                        </Link>
-                      </>
-                    )}
-                  </p>
                 </div>
-                {row.is_active && (
-                  <button
-                    disabled={busy === row.id}
-                    onClick={() => release(row)}
-                    className="shrink-0 text-[11px] px-2 py-1 rounded border border-slate-700 text-slate-300 hover:border-accent disabled:opacity-40"
-                  >
-                    Release
-                  </button>
-                )}
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-      <div className="card">
-        <h3 className="font-semibold mb-3 text-sm text-slate-300">Response audit trail</h3>
-        {actions.length === 0 ? (
-          <p className="text-sm text-slate-500">No response actions recorded.</p>
-        ) : (
-          <div className="space-y-1 max-h-96 overflow-y-auto text-xs">
-            {actions.map((a) => (
-              <div key={a.id} className="flex items-start justify-between gap-3 border-b border-slate-800 py-2">
-                <div className="min-w-0">
-                  <span
-                    className={`font-semibold mr-2 ${
-                      a.action === 'BLOCK' ? 'text-red-400' : a.action === 'WARN' ? 'text-yellow-400' : 'text-green-400'
-                    }`}
-                  >
-                    {a.action}
-                  </span>
-                  <span className="font-mono text-slate-300">{a.target_key}</span>
-                  {a.is_auto && <span className="ml-2 text-slate-500">(auto)</span>}
-                  <p className="text-slate-500 mt-0.5">{a.reason}</p>
-                </div>
-                <div className="text-slate-600 text-right shrink-0">
-                  <div>{a.actor_role}</div>
-                  <div>{new Date(a.created_at).toLocaleString()}</div>
-                </div>
-              </div>
-            ))}
+        <div className="xl:col-span-3 card">
+          <div className="card-header">
+            <h2 className="card-title flex items-center gap-2">
+              <Icon name="activity" size={14} className="text-accent" />
+              Response Audit Trail
+            </h2>
+            <span className="text-2xs text-slate-500">append-only · {actions.length} entries</span>
           </div>
-        )}
+
+          {loading ? (
+            <div className="space-y-2">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+          ) : actions.length === 0 ? (
+            <EmptyState title="No response actions yet" hint="Manual and automatic warn/block decisions appear here." />
+          ) : (
+            <div className="-mx-2 -mb-2 px-2 pb-2 max-h-[620px] overflow-y-auto">
+              <table className="table">
+                <thead className="sticky top-0 bg-bg-panel z-10">
+                  <tr>
+                    <th>Action</th>
+                    <th>Target</th>
+                    <th>Reason</th>
+                    <th>Actor</th>
+                    <th>When</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {actions.map((a) => (
+                    <tr key={a.id}>
+                      <td>
+                        <span className={`badge ${ACTION_TONE[a.action] ?? 'badge-neutral'}`}>{a.action}</span>
+                        {a.is_auto && <span className="ml-1.5 text-2xs text-slate-500">auto</span>}
+                      </td>
+                      <td className="font-mono text-2xs text-slate-300 whitespace-nowrap">{a.target_key}</td>
+                      <td className="text-2xs text-slate-400 max-w-[280px]">{a.reason}</td>
+                      <td className="text-2xs text-slate-500 whitespace-nowrap">{a.actor_role}</td>
+                      <td className="text-2xs text-slate-500 font-mono whitespace-nowrap">{new Date(a.created_at).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

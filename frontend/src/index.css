@@ -2,19 +2,69 @@
 @tailwind components;
 @tailwind utilities;
 
-body {
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+@layer base {
+  html { -webkit-font-smoothing: antialiased; }
+  body { @apply font-sans bg-bg text-slate-200; }
+  ::selection { @apply bg-accent/30 text-white; }
+  :focus-visible { @apply outline-none ring-2 ring-accent/60 ring-offset-2 ring-offset-bg; }
+  /* Scrollbars matched to the surface tokens instead of the OS default. */
+  * { scrollbar-width: thin; scrollbar-color: #263145 transparent; }
+  *::-webkit-scrollbar { width: 9px; height: 9px; }
+  *::-webkit-scrollbar-track { background: transparent; }
+  *::-webkit-scrollbar-thumb { @apply bg-bg-raised rounded-full border-2 border-solid border-transparent bg-clip-padding; }
+  *::-webkit-scrollbar-thumb:hover { @apply bg-slate-600 bg-clip-padding; }
 }
 
-.card {
-  @apply bg-bg-panel border border-slate-800 rounded-xl p-4 shadow-sm;
-}
+@layer components {
+  .card {
+    @apply bg-bg-panel border border-line rounded-xl p-5 shadow-card;
+  }
+  .card-hover {
+    @apply transition duration-200 ease-spring hover:border-line-strong hover:bg-bg-panel2 hover:shadow-raised;
+  }
+  .card-header { @apply flex items-center justify-between gap-3 mb-4; }
+  .card-title { @apply text-sm font-semibold text-slate-100 tracking-tight; }
+  .card-subtitle { @apply text-2xs text-slate-500 mt-0.5; }
 
-.badge {
-  @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold;
-}
+  .badge { @apply inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wider border; }
+  .badge-LOW { @apply bg-severity-low/12 text-severity-low border-severity-low/25; }
+  .badge-MEDIUM { @apply bg-severity-medium/12 text-severity-medium border-severity-medium/25; }
+  .badge-HIGH { @apply bg-severity-high/12 text-severity-high border-severity-high/25; }
+  .badge-CRITICAL { @apply bg-severity-critical/12 text-severity-critical border-severity-critical/30; }
+  .badge-neutral { @apply bg-slate-400/10 text-slate-300 border-slate-400/20; }
+  .badge-accent { @apply bg-accent-soft text-accent border-accent/30; }
 
-.badge-LOW { @apply bg-severity-low/20 text-severity-low; }
-.badge-MEDIUM { @apply bg-severity-medium/20 text-severity-medium; }
-.badge-HIGH { @apply bg-severity-high/20 text-severity-high; }
-.badge-CRITICAL { @apply bg-severity-critical/20 text-severity-critical animate-pulse; }
+  .btn { @apply inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-lg text-sm font-semibold border transition duration-150 ease-spring active:scale-[0.97] disabled:opacity-40 disabled:pointer-events-none; }
+  .btn-primary { @apply btn bg-accent/15 text-accent border-accent/35 hover:bg-accent/25 hover:border-accent/50 hover:shadow-glow-accent; }
+  .btn-danger { @apply btn bg-severity-critical/12 text-severity-critical border-severity-critical/30 hover:bg-severity-critical/22 hover:border-severity-critical/50; }
+  .btn-warn { @apply btn bg-severity-medium/12 text-severity-medium border-severity-medium/30 hover:bg-severity-medium/22; }
+  .btn-ghost { @apply btn bg-transparent text-slate-300 border-line hover:bg-bg-raised hover:border-line-strong hover:text-slate-100; }
+  .btn-sm { @apply px-2.5 py-1.5 text-xs rounded-md; }
+
+  .input { @apply w-full bg-bg-sunken border border-line rounded-lg px-3 py-2 text-sm text-slate-100 placeholder:text-slate-600 transition duration-150 focus:border-accent/50 focus:outline-none focus:ring-2 focus:ring-accent/20; }
+  .label { @apply block text-2xs font-semibold uppercase tracking-wider text-slate-400 mb-1.5; }
+
+  /* Data values (IPs, scores, IDs) are always monospace so digits line up
+     vertically down a table instead of jittering with variable widths. */
+  .mono { @apply font-mono text-[0.8125rem] tabular-nums; }
+
+  .stat { @apply relative overflow-hidden bg-bg-panel border border-line rounded-xl p-4 shadow-card; }
+  .stat-label { @apply text-2xs font-semibold uppercase tracking-wider text-slate-500; }
+  .stat-value { @apply text-3xl font-bold tracking-tight tabular-nums mt-1; }
+
+  .table { @apply w-full text-sm; }
+  .table thead th { @apply text-2xs font-semibold uppercase tracking-wider text-slate-500 text-left px-4 py-3 border-b border-line whitespace-nowrap; }
+  .table tbody tr { @apply border-b border-line/60 last:border-0 transition-colors; }
+  .table tbody tr:hover { @apply bg-bg-panel2/60; }
+  .table tbody td { @apply px-4 py-3 align-middle; }
+
+  .link { @apply text-accent hover:text-accent/80 hover:underline underline-offset-2 transition; }
+
+  .skeleton { @apply relative overflow-hidden bg-bg-raised rounded-md; }
+  .skeleton::after { content: ''; @apply absolute inset-0 -translate-x-full animate-shimmer; background: linear-gradient(90deg, transparent, rgba(148,163,184,0.09), transparent); }
+
+  /* ShopFlow shares the primitives but swaps the accent so the two apps never
+     look like the same product. */
+  .shop-card { @apply bg-white border border-slate-200 rounded-xl shadow-sm; }
+  .shop-link { @apply text-shop-600 hover:text-shop-700 transition; }
+}

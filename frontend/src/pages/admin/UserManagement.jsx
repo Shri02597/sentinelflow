@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react'
 import { getAdminUsers, updateUserRole, updateUserActive } from '../../services/api.js'
+import { SectionHeader, Skeleton } from '../../components/ui.jsx'
+import Icon from '../../components/Icon.jsx'
 
 const ROLES = ['USER', 'ANALYST', 'ADMIN']
 
 export default function UserManagement() {
-  const [users, setUsers] = useState([])
+  const [users, setUsers] = useState(null)
 
   function load() {
     getAdminUsers().then((res) => setUsers(res.data))
@@ -22,45 +24,60 @@ export default function UserManagement() {
   }
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold mb-4">User Management</h1>
-      <div className="card overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-slate-400 text-left border-b border-slate-800">
-            <tr>
-              <th className="py-2 pr-4">Username</th>
-              <th className="py-2 pr-4">Email</th>
-              <th className="py-2 pr-4">Role</th>
-              <th className="py-2 pr-4">Status</th>
-              <th className="py-2 pr-4">Joined</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id} className="border-b border-slate-800/50">
-                <td className="py-2 pr-4">{u.username}</td>
-                <td className="py-2 pr-4 text-slate-400">{u.email}</td>
-                <td className="py-2 pr-4">
-                  <select
-                    value={u.role} onChange={(e) => handleRoleChange(u.id, e.target.value)}
-                    className="bg-bg-panel2 border border-slate-700 rounded-lg px-2 py-1 text-xs"
-                  >
-                    {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
-                  </select>
-                </td>
-                <td className="py-2 pr-4">
-                  <button
-                    onClick={() => handleToggleActive(u.id, u.is_active)}
-                    className={`text-xs px-2 py-1 rounded-full ${u.is_active ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400'}`}
-                  >
-                    {u.is_active ? 'Active' : 'Disabled'}
-                  </button>
-                </td>
-                <td className="py-2 pr-4 text-slate-400">{new Date(u.created_at).toLocaleDateString()}</td>
+    <div className="p-6 lg:p-8 max-w-[1400px]">
+      <SectionHeader title="User Management" subtitle="Change roles and enable or disable accounts" />
+
+      <div className="card overflow-x-auto p-0">
+        {users === null ? (
+          <div className="space-y-2 p-5">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}</div>
+        ) : (
+          <table className="table">
+            <thead>
+              <tr>
+                <th>User</th>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Joined</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td>
+                    <div className="flex items-center gap-2.5">
+                      <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-accent/15 text-2xs font-bold uppercase text-accent">
+                        {u.username?.[0] ?? '?'}
+                      </span>
+                      <span className="text-xs font-semibold text-slate-100">{u.username}</span>
+                    </div>
+                  </td>
+                  <td className="font-mono text-2xs text-slate-400">{u.email}</td>
+                  <td>
+                    <select
+                      value={u.role}
+                      onChange={(e) => handleRoleChange(u.id, e.target.value)}
+                      aria-label={`Role for ${u.username}`}
+                      className="input w-auto py-1 text-2xs"
+                    >
+                      {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <button
+                      onClick={() => handleToggleActive(u.id, u.is_active)}
+                      className={`badge ${u.is_active ? 'badge-LOW' : 'badge-CRITICAL'}`}
+                    >
+                      <Icon name={u.is_active ? 'check' : 'close'} size={10} />
+                      {u.is_active ? 'Active' : 'Disabled'}
+                    </button>
+                  </td>
+                  <td className="font-mono text-2xs text-slate-500 whitespace-nowrap">{new Date(u.created_at).toLocaleDateString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
     </div>
   )

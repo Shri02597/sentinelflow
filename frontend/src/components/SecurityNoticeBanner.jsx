@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getMyNotifications, markNotificationRead } from '../services/api.js'
 import { useLiveFeed } from '../context/LiveFeedContext.jsx'
+import Icon from './Icon.jsx'
 
 /**
  * The subject's view of a warning or block.
@@ -55,27 +56,35 @@ export default function SecurityNoticeBanner() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-6 pt-4 space-y-2">
+    <div className="mx-auto max-w-6xl px-6 pt-4 space-y-2">
       {visible.map((n) => {
         const blocked = n.title === 'Access blocked'
         return (
           <div
             key={n.id}
-            className={`flex items-start justify-between gap-3 rounded-lg border px-4 py-3 text-sm ${
+            role="status"
+            className={`flex items-start gap-3 rounded-xl border px-4 py-3 ${
               blocked
-                ? 'border-red-300 bg-red-50 text-red-800'
-                : 'border-amber-300 bg-amber-50 text-amber-900'
+                ? 'border-severity-critical/35 bg-severity-critical/8 text-ink'
+                : 'border-severity-medium/35 bg-severity-medium/8 text-ink'
             }`}
           >
-            <div>
-              <span className="font-semibold">{n.title}.</span>{' '}
-              <span>{n.message}</span>
+            <span className={`grid h-7 w-7 shrink-0 place-items-center rounded-lg ${
+              blocked ? 'bg-severity-critical/12 text-severity-critical' : 'bg-severity-medium/12 text-severity-medium'
+            }`}>
+              {blocked ? <Icon name="block" size={14} /> : <Icon name="warn" size={14} />}
+            </span>
+            <div className="min-w-0 flex-1 text-sm leading-relaxed">
+              <span className="font-bold">{n.title}.</span>{' '}
+              <span className="text-ink-soft">{n.message}</span>
             </div>
             <button
               onClick={() => dismiss(n)}
-              className="shrink-0 text-xs underline opacity-70 hover:opacity-100"
+              className="shrink-0 rounded-lg p-1.5 text-ink-faint transition hover:bg-black/5 hover:text-ink"
+              aria-label={`Dismiss: ${n.title}`}
+              title="Dismiss"
             >
-              Dismiss
+              <Icon name="close" size={14} />
             </button>
           </div>
         )
