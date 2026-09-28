@@ -56,6 +56,22 @@ class Settings(BaseSettings):
     RISK_WEIGHT_REPEAT_EVENT_BONUS: int = 5
     RISK_SCORE_MAX: int = 100
 
+    # --- Automated response / containment policy ---
+    # When a detection pushes a subject's risk score past these thresholds the
+    # platform acts on it without waiting for an analyst: WARN first, then
+    # BLOCK. Set AUTO_RESPONSE_ENABLED=False to keep the platform detect-only.
+    AUTO_RESPONSE_ENABLED: bool = True
+    AUTO_WARN_RISK_SCORE: int = 60   # HIGH  -> notify the account
+    AUTO_BLOCK_RISK_SCORE: int = 80  # CRITICAL -> block the source IP
+    AUTO_RESPONSE_REPEAT_INTERVAL: int = 5  # re-notify every N events once warned
+
+    # Enforcement middleware. Blocked subjects get a 403 on these prefixes
+    # unless the caller is an ANALYST/ADMIN, who are never locked out of the
+    # console that would let them undo the block.
+    ENFORCEMENT_EXEMPT_PREFIXES: str = (
+        "/api/health,/docs,/openapi.json,/redoc,/api/security,/api/admin,/ws"
+    )
+
     # --- Rate limiting (sensitive endpoints) ---
     RATE_LIMIT_LOGIN_PER_MINUTE: int = 10
     RATE_LIMIT_REGISTER_PER_MINUTE: int = 25
@@ -70,6 +86,10 @@ class Settings(BaseSettings):
         if frontend and frontend not in origins:
             origins.append(frontend)
         return origins
+
+    @property
+    def enforcement_exempt_prefixes(self) -> List[str]:
+        return [p.strip() for p in self.ENFORCEMENT_EXEMPT_PREFIXES.split(",") if p.strip()]
 
 
 @lru_cache

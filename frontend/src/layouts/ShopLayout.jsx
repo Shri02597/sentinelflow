@@ -1,6 +1,7 @@
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext.jsx'
+import SecurityNoticeBanner from '../components/SecurityNoticeBanner.jsx'
 
 const NAV = [
   { to: '/home', label: 'Home' },
@@ -70,6 +71,7 @@ export default function ShopLayout() {
           ))}
         </nav>
       </header>
+      <SecurityNoticeBanner />
       <main className="max-w-6xl mx-auto px-6 py-8">
         <Outlet />
       </main>

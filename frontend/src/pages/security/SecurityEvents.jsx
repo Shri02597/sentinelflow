@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { getEvents } from '../../services/api.js'
+import { useLiveFeed } from '../../context/LiveFeedContext.jsx'
 import EventFeedItem from '../../components/EventFeedItem.jsx'
+import ErrorState from '../../components/ErrorState.jsx'
 
 const ATTACK_TYPES = ['BRUTE_FORCE', 'SUSPICIOUS_INPUT', 'ABNORMAL_RATE', 'SUSPICIOUS_ENDPOINT', 'BEHAVIORAL_ANOMALY']
 const SEVERITIES = ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']
@@ -22,17 +24,33 @@ export default function SecurityEvents() {
   const [sortBy, setSortBy] = useState('timestamp')
   const [sortDir, setSortDir] = useState('desc')
   const [page, setPage] = useState(0)
+  const [error, setError] = useState(null)
+  const { pollTick } = useLiveFeed()
 
-  useEffect(() => {
-    const params = {
-      ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)),
-      sort_by: sortBy,
-      sort_dir: sortDir,
-      limit: PAGE_SIZE,
-      offset: page * PAGE_SIZE,
+  const params = {
+    ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)),
+    sort_by: sortBy,
+    sort_dir: sortDir,
+    limit: PAGE_SIZE,
+    offset: page * PAGE_SIZE,
+  }
+  const paramsKey = JSON.stringify(params)
+
+  const load = useCallback(async () => {
+    try {
+      const res = await getEvents(JSON.parse(paramsKey))
+      setEvents(res.data)
+      setError(null)
+    } catch {
+      setError('Could not load security events.')
     }
-    getEvents(params).then((res) => setEvents(res.data))
-  }, [filters, sortBy, sortDir, page])
+    // paramsKey is a stable stringification of the query, so it stands in for
+    // the filter/sort/page object without re-creating this callback each render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paramsKey])
+
+  useEffect(() => { load() }, [load])
+  useEffect(() => { if (pollTick > 0) load() }, [pollTick, load])
 
   function update(field) {
     return (e) => {
@@ -46,6 +64,8 @@ export default function SecurityEvents() {
   return (
     <div>
       <h1 className="text-2xl font-semibold mb-4">Security Events</h1>
+
+      {error && <ErrorState message={error} onRetry={load} className="mb-4" />}
 
       <div className="flex flex-wrap gap-3 mb-3">
         <select value={filters.attack_type} onChange={update('attack_type')} className="bg-bg-panel2 border border-slate-700 rounded-lg px-3 py-1.5 text-sm">
@@ -108,7 +128,7 @@ export default function SecurityEvents() {
       </div>
 
       <div className="space-y-2">
-        {events.length === 0 && <p className="text-sm text-slate-500">No events match these filters.</p>}
+        {events.length === 0 && !error && <p className="text-sm text-slate-500">No events match these filters.</p>}
         {events.map((ev) => <EventFeedItem key={ev.id} event={ev} />)}
       </div>
 

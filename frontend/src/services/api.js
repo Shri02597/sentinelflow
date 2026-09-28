@@ -50,6 +50,22 @@ export const getStats = () => api.get('/api/security/stats')
 export const getTraffic = (minutes = 60) => api.get('/api/security/traffic', { params: { minutes } })
 export const getRiskyUsers = () => api.get('/api/security/risky-users')
 
+// --- Attribution + response / containment (analyst/admin) ---
+export const getTopThreats = (params) => api.get('/api/security/threats/top', { params })
+export const getBlocked = (includeReleased = false) =>
+  api.get('/api/security/response/blocked', { params: { include_released: includeReleased } })
+export const getResponseActions = (params) => api.get('/api/security/response/actions', { params })
+export const raiseResponse = (payload) => api.post('/api/security/response', payload)
+export const releaseTarget = ({ target_type, target_key, reason }) =>
+  api.post('/api/security/response/release', null, { params: { target_type, target_key, reason } })
+export const blockTarget = (payload) => raiseResponse({ ...payload, action: 'BLOCK' })
+export const warnTarget = (payload) => raiseResponse({ ...payload, action: 'WARN' })
+
+// --- Notifications (any authenticated role — warnings reach the subject) ---
+export const getMyNotifications = (unreadOnly = false) =>
+  api.get('/api/security/notifications', { params: { unread_only: unreadOnly } })
+export const markNotificationRead = (id) => api.post(`/api/security/notifications/${id}/read`)
+
 // --- Users / risk ---
 export const getMyActivity = (limit = 100) => api.get('/api/users/me/activity', { params: { limit } })
 export const getUserRisk = (userId) => api.get(`/api/users/${userId}/risk`)

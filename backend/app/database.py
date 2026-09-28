@@ -35,5 +35,8 @@ def get_db():
 
 def init_db():
     """Create tables. In production, prefer Alembic migrations over this."""
-    from app.models import user, request_log, security_event, incident, risk_score, product, cart_item  # noqa: F401
+    from app.models import (  # noqa: F401
+        user, request_log, security_event, incident, risk_score,
+        response_action, product, cart_item,
+    )
     Base.metadata.create_all(bind=engine)

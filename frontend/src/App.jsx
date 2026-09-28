@@ -21,6 +21,7 @@ import SecurityEvents from './pages/security/SecurityEvents.jsx'
 import ThreatDetails from './pages/security/ThreatDetails.jsx'
 import RiskyUsers from './pages/security/RiskyUsers.jsx'
 import UserRiskProfile from './pages/security/UserRiskProfile.jsx'
+import BlockedIdentities from './pages/security/BlockedIdentities.jsx'
 
 import UserManagement from './pages/admin/UserManagement.jsx'
 import Settings from './pages/admin/Settings.jsx'
@@ -50,6 +51,7 @@ export default function App() {
         <Route path="/security/events" element={<SecurityEvents />} />
         <Route path="/security/events/:id" element={<ThreatDetails />} />
         <Route path="/security/risky-users" element={<RiskyUsers />} />
+        <Route path="/security/containment" element={<BlockedIdentities />} />
         <Route path="/security/users/:userId/risk" element={<UserRiskProfile />} />
       </Route>
 

@@ -1,16 +1,35 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { getRiskyUsers } from '../../services/api.js'
+import { useLiveFeed } from '../../context/LiveFeedContext.jsx'
 import Badge from '../../components/Badge.jsx'
+import ErrorState from '../../components/ErrorState.jsx'
 
 export default function RiskyUsers() {
   const [rows, setRows] = useState([])
+  const [error, setError] = useState(null)
+  const { subscribe, pollTick } = useLiveFeed()
 
-  useEffect(() => { getRiskyUsers().then((res) => setRows(res.data)) }, [])
+  const load = useCallback(async () => {
+    try {
+      const res = await getRiskyUsers()
+      setRows(res.data)
+      setError(null)
+    } catch {
+      setError('Could not load risk data.')
+    }
+  }, [])
+
+  useEffect(() => { load() }, [load])
+  useEffect(() => { if (pollTick > 0) load() }, [pollTick, load])
+  useEffect(() => subscribe((msg) => {
+    if (msg.type === 'risk_update' || msg.type === 'security_event') load()
+  }), [subscribe, load])
 
   return (
     <div>
       <h1 className="text-2xl font-semibold mb-4">Top Risky Users / IPs</h1>
+      {error && <ErrorState message={error} onRetry={load} className="mb-4" />}
       <div className="card overflow-x-auto">
         <table className="w-full text-sm">
           <thead className="text-slate-400 text-left border-b border-slate-800">

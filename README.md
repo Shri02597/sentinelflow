@@ -89,6 +89,67 @@ Levels: `LOW` (0-29), `MEDIUM` (30-59), `HIGH` (60-79), `CRITICAL` (80-100).
 The reasons contributing to a score are stored and shown on the User Risk
 Profile page (e.g. "6 failed login attempts", "abnormal request rate").
 
+## Response & Containment
+
+Detection alone doesn't stop anything. SentinelFlow closes the loop: once a
+subject crosses a risk threshold, the platform **warns** it, and at CRITICAL
+**blocks** its traffic outright.
+
+| Trigger | Action | Effect |
+|---|---|---|
+| Score ≥ 60 (`HIGH`) | `WARN` | Banner in the shop UI. Traffic unaffected. |
+| Score ≥ 80 (`CRITICAL`) | `BLOCK` | Every request from the source IP gets `403`. |
+
+Both are configurable in `app/config.py` (`AUTO_WARN_RISK_SCORE`,
+`AUTO_BLOCK_RISK_SCORE`, `AUTO_RESPONSE_ENABLED` — set the last one to `False`
+for a detect-only deployment).
+
+**Why block the IP and not the account.** A brute-force target is usually the
+*victim*, not the attacker. Auto-locking their account would hand the attacker
+an account-lockout denial of service. The IP is the thing you can actually cut
+off, so blocking is keyed on it; warnings go to the account, when there is one.
+
+**Attribution.** `GET /api/security/threats/top` answers "which IP is the worst
+offender and what is it running?" in one row per source — risk score, dominant
+attack type, per-attack breakdown, affected accounts, and whether it is already
+blocked or warned. Surfaced on the dashboard as **Top Threats**, with inline
+Warn/Block controls.
+
+**Analyst actions.** Every threat detail page has a Response panel (warn /
+block / release, with a reason). `GET /api/security/response/actions` is an
+append-only audit trail of every decision, automatic or manual, so "who blocked
+this and why" is always answerable.
+
+**Design constraints worth knowing:**
+- `ResponseAction` is append-only; `BlockedIdentity` holds current enforcement
+  state so the middleware answers "is this blocked?" with one indexed lookup
+  instead of replaying history per request.
+- Blocked requests are still written to `request_logs` (as `403`) *before*
+  rejection — a blocked host probing the API stays visible to the detectors.
+  `EnforcementMiddleware` is registered before `LoggingMiddleware` precisely to
+  get this ordering.
+- Analysts and admins are never locked out of `/api/security` or `/api/admin`.
+  A block you can't inspect or undo isn't a control, it's an outage.
+
+## Network Resilience
+
+The dashboard does not depend on the WebSocket. Every frame it pushes is also
+served over REST, so a bad link degrades the feed instead of freezing it.
+
+| Condition | Behaviour |
+|---|---|
+| Socket live | WebSocket push, no polling at all |
+| Socket down, tab visible | REST polling every 15s, socket retrying with jittered backoff |
+| Socket down, tab hidden | Polling slows to 60s (nobody's watching a background tab) |
+| No network | All retries and polling pause; resume immediately on the `online` event |
+| Token rejected (4401/4403) | Retries **stop** — the session is cleared rather than looping forever |
+
+Failures are also isolated per panel: the dashboard fetches stats, traffic and
+events with `Promise.allSettled`, so one slow endpoint degrades one card instead
+of blanking the page. Live-socket refetches are coalesced to at most one per 2s
+so a burst of detections can't cause a request storm on a weak connection.
+
+
 ## Database Schema
 
 - `users` — auth + role (`USER`, `ANALYST`, `ADMIN`)
@@ -98,6 +159,9 @@ Profile page (e.g. "6 failed login attempts", "abnormal request rate").
 - `security_events` — detector output: attack type, severity, risk score, status
 - `incidents` / `incident_notes` — analyst investigation trail
 - `risk_scores` — current score/level per user or IP
+- `response_actions` — append-only WARN/BLOCK/UNBLOCK audit trail
+- `blocked_identities` — current enforcement state per target
+- `notifications` — warnings delivered to an account
 
 A small demo catalog (12 products across Electronics/Furniture/Lifestyle/
 Kitchen/Apparel) is seeded automatically on first startup if the table is
@@ -129,6 +193,13 @@ POST   /api/security/events/{id}/notes
 GET    /api/security/stats
 GET    /api/security/traffic
 GET    /api/security/risky-users
+GET    /api/security/threats/top               (worst IPs + dominant attack + response state)
+GET    /api/security/response/blocked          (include_released=true for history)
+GET    /api/security/response/actions          (append-only audit trail)
+POST   /api/security/response                  ({event_id, action: WARN|BLOCK, reason?})
+POST   /api/security/response/release          (?target_type=&target_key=)
+GET    /api/security/notifications             (own warnings — any authenticated role)
+POST   /api/security/notifications/{id}/read
 
 GET    /api/users/{id}/risk                   (ANALYST/ADMIN)
 GET    /api/users/{id}/activity               (ANALYST/ADMIN)
@@ -191,6 +262,14 @@ and admin RBAC + live threshold updates. All run locally against an
 isolated SQLite test database; the shared rate limiter is reset between
 tests so login/register limits don't bleed across test functions.
 
+`tests/test_containment.py` adds 15 more covering the response layer: a block
+actually returns 403, a blocked request is still logged, the analyst console
+stays reachable from a blocked IP, a blocked account is locked out, warn
+notifies without blocking, notifications are scoped to their owner, release
+restores access, the auto-response policy escalates HIGH→WARN and
+CRITICAL→BLOCK, it is idempotent across a detection burst, the kill switch
+works, and the top-threat view ranks correctly. 39 total.
+
 ## Security Considerations
 
 - Passwords are bcrypt-hashed; plaintext is never logged or stored.
@@ -220,10 +299,19 @@ tests so login/register limits don't bleed across test functions.
    - **Abnormal rate**: refresh/browse `/products` rapidly (100+ requests/min).
    - **Suspicious endpoint**: request a few nonexistent URLs.
 5. Watch the SentinelFlow dashboard update live via WebSocket — no refresh.
-6. Open the event's Threat Detail page, review the related request timeline,
-   change status to `INVESTIGATING` then `RESOLVED`.
-7. As an `ADMIN`, visit `/admin/users` to manage roles, or `/admin/settings`
-   to adjust detection thresholds live.
+6. On the **Top Threats** panel, the offending IP is already ranked with its
+   dominant attack type. Press **Warn**, then **Block IP** — or wait for the
+   auto-response policy to do it once the score hits 80. Requests from that IP
+   start returning 403 while the console stays usable.
+7. Open the event's Threat Detail page, review the related request timeline,
+   change status to `INVESTIGATING` then `RESOLVED`, and use the Response
+   panel to release the block.
+8. As the warned shopper, a security banner appears in the ShopFlow header
+   area explaining the warning.
+9. `/security/containment` shows the live block list and the full audit trail
+   of every automatic and manual action.
+10. As an `ADMIN`, visit `/admin/users` to manage roles, or `/admin/settings`
+    to adjust detection thresholds live.
 
 ## Current Status / Roadmap
 

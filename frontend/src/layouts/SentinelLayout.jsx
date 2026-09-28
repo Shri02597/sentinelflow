@@ -1,16 +1,19 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
+import ConnectionStatus from '../components/ConnectionStatus.jsx'
 
 const NAV_BY_ROLE = {
   ANALYST: [
     { to: '/security', label: 'Dashboard' },
     { to: '/security/events', label: 'Security Events' },
     { to: '/security/risky-users', label: 'Risky Users' },
+    { to: '/security/containment', label: 'Containment' },
   ],
   ADMIN: [
     { to: '/security', label: 'Dashboard' },
     { to: '/security/events', label: 'Security Events' },
     { to: '/security/risky-users', label: 'Risky Users' },
+    { to: '/security/containment', label: 'Containment' },
     { to: '/admin/users', label: 'User Management' },
     { to: '/admin/settings', label: 'Settings' },
   ],
@@ -44,6 +47,7 @@ export default function SentinelLayout() {
           ))}
         </nav>
         <div className="p-3 border-t border-slate-800 text-sm">
+          <ConnectionStatus className="mb-3" />
           <Link to="/home" className="block text-slate-500 hover:text-accent text-xs mb-2">
             ← Back to ShopFlow
           </Link>

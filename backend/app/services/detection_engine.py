@@ -18,8 +18,11 @@ from app.detectors.behavioral_anomaly import BehavioralAnomalyDetector
 from app.models.request_log import RequestLog
 from app.models.security_event import SecurityEvent
 from app.services.risk_scoring import apply_risk_delta
+from app.services.containment import auto_respond
 from app.schemas.security import SecurityEventOut
-from app.websocket.manager import broadcast_security_event, broadcast_risk_update
+from app.websocket.manager import (
+    broadcast_security_event, broadcast_risk_update, broadcast_response_action,
+)
 
 DETECTORS = [
     BruteForceDetector(),
@@ -35,6 +38,10 @@ async def run_detection(db: Session, log: RequestLog) -> None:
     Called by the logging middleware after each RequestLog is persisted.
     Runs all detectors, persists any resulting SecurityEvent + RiskScore
     updates in one transaction, then broadcasts over WebSocket.
+
+    If the resulting risk score crosses the auto-response thresholds, the
+    containment service warns or blocks the source as part of the same
+    transaction, so a detection and its response are never out of sync.
     """
     for detector in DETECTORS:
         result: Optional[dict] = detector.check(db, log)
@@ -66,6 +73,17 @@ async def run_detection(db: Session, log: RequestLog) -> None:
         )
         event.risk_score = risk_row.score
 
+        db.flush()  # persist the risk row so the policy sees a real score
+
+        response_actions = auto_respond(
+            db,
+            risk_row=risk_row,
+            source_ip=log.source_ip,
+            event_id=event.id,
+            attack_type=result["attack_type"].value,
+            user_id=log.user_id,
+        )
+
         db.commit()
         db.refresh(event)
 
@@ -79,3 +97,16 @@ async def run_detection(db: Session, log: RequestLog) -> None:
                 "level": risk_row.level,
             }
         )
+        for action in response_actions:
+            await broadcast_response_action(
+                {
+                    "id": action.id,
+                    "target_type": action.target_type.value,
+                    "target_key": action.target_key,
+                    "action": action.action.value,
+                    "reason": action.reason,
+                    "is_auto": action.is_auto,
+                    "source_event_id": action.source_event_id,
+                    "created_at": action.created_at.isoformat() if action.created_at else None,
+                }
+            )

@@ -46,3 +46,8 @@ async def broadcast_stats(stats_dict: dict):
 
 async def broadcast_risk_update(risk_dict: dict):
     await manager.broadcast({"type": "risk_update", "data": risk_dict})
+
+
+async def broadcast_response_action(action_dict: dict):
+    """Containment decisions (WARN / BLOCK / UNBLOCK) pushed to dashboards."""
+    await manager.broadcast({"type": "response_action", "data": action_dict})

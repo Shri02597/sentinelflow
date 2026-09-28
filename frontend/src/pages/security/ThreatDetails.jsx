@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getEvent, getRelatedRequests, updateEvent, addIncidentNote, getEventNotes, getEvents } from '../../services/api.js'
+import {
+  getEvent, getRelatedRequests, updateEvent, addIncidentNote, getEventNotes, getEvents,
+} from '../../services/api.js'
 import Badge from '../../components/Badge.jsx'
 import EventFeedItem from '../../components/EventFeedItem.jsx'
+import ResponsePanel from './ResponsePanel.jsx'
 
 const STATUSES = ['NEW', 'INVESTIGATING', 'RESOLVED', 'FALSE_POSITIVE']
 
@@ -36,7 +39,6 @@ export default function ThreatDetails() {
     loadNotes()
   }
   useEffect(load, [id])
-
   async function changeStatus(status) {
     setBusy(true)
     try {
@@ -89,6 +91,8 @@ export default function ThreatDetails() {
           ))}
         </div>
       </div>
+
+      <ResponsePanel event={event} onChanged={load} />
 
       <div className="card">
         <h3 className="font-semibold mb-2 text-sm text-slate-300">

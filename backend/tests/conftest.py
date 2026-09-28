@@ -29,7 +29,10 @@ app.dependency_overrides[get_db] = override_get_db
 
 @pytest.fixture(scope="function", autouse=True)
 def setup_db():
-    from app.models import user, request_log, security_event, incident, risk_score, product, cart_item  # noqa: F401
+    from app.models import (  # noqa: F401
+        user, request_log, security_event, incident, risk_score,
+        response_action, product, cart_item,
+    )
     Base.metadata.create_all(bind=engine)
     # Each test gets a fresh rate-limit bucket too — otherwise the login/register
     # limiter (shared, in-memory, keyed by the TestClient's fixed IP) carries

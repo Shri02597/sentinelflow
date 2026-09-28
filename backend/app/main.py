@@ -6,16 +6,22 @@ from slowapi import _rate_limit_exceeded_handler
 
 from app.config import settings
 from app.database import init_db
+from app.middleware.enforcement import EnforcementMiddleware
 from app.middleware.logging_middleware import LoggingMiddleware
 from app.utils.rate_limit import limiter
 
-from app.routers import auth, users, security, ws, products, cart, admin
+from app.routers import auth, users, security, ws, products, cart, admin, response
 
 app = FastAPI(title=settings.APP_NAME, debug=settings.DEBUG)
 
 # --- Rate limiting ---
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# --- Containment (registered first => runs innermost) ---
+# Only the inner part of the stack actually rejects traffic; the logging
+# middleware below still records blocked attempts as 403s before that happens.
+app.add_middleware(EnforcementMiddleware)
 
 # --- CORS ---
 app.add_middleware(
@@ -26,7 +32,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Request logging + detection pipeline (see app/middleware) ---
+# --- Request logging + detection pipeline (outermost) ---
 app.add_middleware(LoggingMiddleware)
 
 # --- Routers ---
@@ -35,6 +41,7 @@ app.include_router(users.router)
 app.include_router(products.router)
 app.include_router(cart.router)
 app.include_router(security.router)
+app.include_router(response.router)
 app.include_router(admin.router)
 app.include_router(ws.router)
 
