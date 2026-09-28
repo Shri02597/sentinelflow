@@ -104,6 +104,16 @@ Both are configurable in `app/config.py` (`AUTO_WARN_RISK_SCORE`,
 `AUTO_BLOCK_RISK_SCORE`, `AUTO_RESPONSE_ENABLED` — set the last one to `False`
 for a detect-only deployment).
 
+**Loopback and private addresses are never auto-blocked.** If a CRITICAL
+detection comes from `127.0.0.1`, `10.x`, `192.168.x` or any other
+private/link-local/reserved address, the policy declines the block and records a
+`WARN` in the audit trail saying the block was withheld. Two reasons: in a local
+demo the analyst and the attacker share one address, so blocking it takes down
+the whole app; and in production a private range is often a shared NAT gateway,
+so blocking it locks out a whole office. **Manual analyst blocks are not
+restricted** — blocking your own machine to verify enforcement works is a
+legitimate thing to want. Override with `AUTO_BLOCK_ALLOW_PRIVATE_IPS`.
+
 **Why block the IP and not the account.** A brute-force target is usually the
 *victim*, not the attacker. Auto-locking their account would hand the attacker
 an account-lockout denial of service. The IP is the thing you can actually cut
@@ -301,8 +311,12 @@ works, and the top-threat view ranks correctly. 39 total.
 5. Watch the SentinelFlow dashboard update live via WebSocket — no refresh.
 6. On the **Top Threats** panel, the offending IP is already ranked with its
    dominant attack type. Press **Warn**, then **Block IP** — or wait for the
-   auto-response policy to do it once the score hits 80. Requests from that IP
-   start returning 403 while the console stays usable.
+   auto-response policy to do it once the score hits 80.
+
+   > On `localhost` the auto-block is deliberately withheld (see above), so use
+   > the manual **Block IP** button to demonstrate the 403. If you do block
+   > `127.0.0.1` manually, release it from `/security/containment` afterwards
+   > or ShopFlow will keep returning 403.
 7. Open the event's Threat Detail page, review the related request timeline,
    change status to `INVESTIGATING` then `RESOLVED`, and use the Response
    panel to release the block.

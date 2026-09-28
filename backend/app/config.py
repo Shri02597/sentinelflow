@@ -65,6 +65,13 @@ class Settings(BaseSettings):
     AUTO_BLOCK_RISK_SCORE: int = 80  # CRITICAL -> block the source IP
     AUTO_RESPONSE_REPEAT_INTERVAL: int = 5  # re-notify every N events once warned
 
+    # Never auto-block loopback/private/link-local addresses. Two reasons: in a
+    # local demo the analyst and the "attacker" share one address, so a block
+    # takes down the whole app; and in production a private range is frequently
+    # a shared NAT gateway, so auto-blocking it locks out an entire office.
+    # Manual analyst blocks are never restricted by this.
+    AUTO_BLOCK_ALLOW_PRIVATE_IPS: bool = False
+
     # Enforcement middleware. Blocked subjects get a 403 on these prefixes
     # unless the caller is an ANALYST/ADMIN, who are never locked out of the
     # console that would let them undo the block.

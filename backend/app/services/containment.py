@@ -25,6 +25,7 @@ Design notes:
 """
 from datetime import datetime
 from typing import Optional
+import ipaddress
 
 from sqlalchemy.orm import Session
 
@@ -65,6 +66,36 @@ def is_user_blocked(db: Session, user_id: int) -> Optional[BlockedIdentity]:
     if row is not None and row.is_active:
         return row
     return None
+
+
+def is_auto_blockable_ip(ip: str) -> bool:
+    """
+    Whether the auto-response policy is allowed to cut this source off.
+
+    Refuses loopback, private, link-local, reserved and multicast addresses.
+    Blocking one of those is almost always wrong: it is either the analyst's own
+    machine (local demo) or a shared NAT gateway (production), and in both
+    cases the blast radius is everyone behind that address rather than the
+    attacker. Manual analyst blocks bypass this — an analyst blocking their own
+    machine to test enforcement is a legitimate thing to want.
+    """
+    if settings.AUTO_BLOCK_ALLOW_PRIVATE_IPS:
+        return True
+    try:
+        addr = ipaddress.ip_address(ip)
+    except ValueError:
+        # Not a bare IP literal (a proxy supplied a hostname, say). Don't
+        # guess: refusing to protect because a value was unparseable is the
+        # worse of the two failure modes, so treat it as blockable.
+        return True
+    return not (
+        addr.is_loopback
+        or addr.is_private
+        or addr.is_link_local
+        or addr.is_reserved
+        or addr.is_unspecified
+        or addr.is_multicast
+    )
 
 
 def apply_action(
@@ -210,22 +241,45 @@ def auto_respond(
     if score >= settings.AUTO_BLOCK_RISK_SCORE:
         key = target_key_for_ip(source_ip)
         if is_ip_blocked(db, source_ip) is None:
-            applied.append(
-                apply_action(
-                    db,
-                    target_type=TargetType.IP,
-                    target_key=key,
-                    action=ActionType.BLOCK,
-                    reason=(
-                        f"Automatic block: risk score reached {score} (CRITICAL) after "
-                        f"{attack_type} detection."
-                    ),
-                    source_event_id=event_id,
-                    is_auto=True,
-                    source_ip=source_ip,
-                    user_id=user_id,
+            if is_auto_blockable_ip(source_ip):
+                applied.append(
+                    apply_action(
+                        db,
+                        target_type=TargetType.IP,
+                        target_key=key,
+                        action=ActionType.BLOCK,
+                        reason=(
+                            f"Automatic block: risk score reached {score} (CRITICAL) after "
+                            f"{attack_type} detection."
+                        ),
+                        source_event_id=event_id,
+                        is_auto=True,
+                        source_ip=source_ip,
+                        user_id=user_id,
+                    )
                 )
-            )
+            else:
+                # Degrade to a warning rather than staying silent, so the audit
+                # trail still records that a block was considered and why it
+                # was declined. Silence here would look like the policy
+                # simply hadn't fired.
+                applied.append(
+                    apply_action(
+                        db,
+                        target_type=TargetType.IP,
+                        target_key=key,
+                        action=ActionType.WARN,
+                        reason=(
+                            f"Automatic block withheld: {source_ip} is a loopback/private "
+                            f"address (risk score {score}, {attack_type}). Manual block "
+                            f"required to cut this source off."
+                        ),
+                        source_event_id=event_id,
+                        is_auto=True,
+                        source_ip=source_ip,
+                        user_id=user_id,
+                    )
+                )
         return applied  # blocking supersedes warning
 
     # --- HIGH: warn the account, don't lock it out. ---

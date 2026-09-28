@@ -19,10 +19,13 @@ from app.models.response_action import ActionType, TargetType
 from app.models.security_event import AttackType, SecurityEvent
 from app.models.user import User, UserRole
 from app.services.containment import (
-    apply_action, auto_respond, is_ip_blocked, target_key_for_ip,
+    apply_action, auto_respond, is_auto_blockable_ip, is_ip_blocked, target_key_for_ip,
 )
 
-ATTACKER_IP = "203.0.113.77"
+# Genuinely public addresses. The RFC 5737 documentation ranges (203.0.113.x,
+# 198.51.100.x) are reported as private by Python's ipaddress module, so using
+# them here would silently exercise the private-address exemption path.
+ATTACKER_IP = "45.33.32.156"
 ATTACKER_HEADERS = {"X-Forwarded-For": ATTACKER_IP}
 
 
@@ -186,7 +189,7 @@ def test_warn_notifies_the_account_without_blocking_it(client):
 
     db = SessionLocal()
     account = db.query(User).filter(User.email == "warned@example.com").first()
-    event = _make_event(db, "198.51.100.50", user_id=account.id, attack_type=AttackType.BEHAVIORAL_ANOMALY)
+    event = _make_event(db, "45.33.32.90", user_id=account.id, attack_type=AttackType.BEHAVIORAL_ANOMALY)
     event_id = event.id
     db.close()
 
@@ -372,6 +375,55 @@ def test_auto_response_respects_the_kill_switch(client, monkeypatch):
 
 
 # --------------------------------------------------------------------------
+# Private / loopback addresses must not be auto-blocked
+# --------------------------------------------------------------------------
+def test_loopback_and_private_addresses_are_not_auto_blockable(client):
+    for ip in ["127.0.0.1", "10.1.2.3", "192.168.1.1", "172.16.0.1", "169.254.1.1", "203.0.113.7"]:
+        assert is_auto_blockable_ip(ip) is False, f"{ip} should not be auto-blockable"
+    assert is_auto_blockable_ip(ATTACKER_IP) is True
+    assert is_auto_blockable_ip("8.8.8.8") is True
+
+
+def test_auto_response_warns_instead_of_blocking_loopback(client):
+    """
+    On a local demo the analyst and the attacker share 127.0.0.1, so a block
+    would take down the whole app. The policy must decline the block, say so
+    in the audit trail, and still warn.
+    """
+    db = SessionLocal()
+    try:
+        event = _make_event(db, "127.0.0.1")
+        critical = RiskScore(user_id=None, source_ip="127.0.0.1", score=95,
+                             level=RiskLevel.CRITICAL, reasons="[]")
+        db.add(critical)
+        db.commit()
+
+        actions = auto_respond(db, risk_row=critical, source_ip="127.0.0.1", event_id=event.id,
+                              attack_type=AttackType.BRUTE_FORCE.value)
+        assert [a.action for a in actions] == [ActionType.WARN]
+        assert is_ip_blocked(db, "127.0.0.1") is None
+        assert "withheld" in actions[0].reason
+    finally:
+        db.close()
+
+
+def test_manual_block_still_works_on_a_private_address(client, monkeypatch):
+    """
+    The exemption is only on the *automatic* path. An analyst blocking their
+    own machine to verify enforcement works is a legitimate thing to want.
+    """
+    monkeypatch.setattr(settings, "AUTO_BLOCK_ALLOW_PRIVATE_IPS", False)
+    headers = _analyst_headers(client)
+    resp = client.post(
+        "/api/security/response",
+        json={"target_type": "IP", "source_ip": "127.0.0.1", "action": "BLOCK", "reason": "enforcement test"},
+        headers=headers,
+    )
+    assert resp.status_code == 201
+    assert resp.json()["action"] == "BLOCK"
+
+
+# --------------------------------------------------------------------------
 # Attribution: which IP is worst, and what is it doing?
 # --------------------------------------------------------------------------
 def test_top_threats_ranks_by_risk_and_names_the_attack(client):
@@ -380,7 +432,7 @@ def test_top_threats_ranks_by_risk_and_names_the_attack(client):
     try:
         from app.models.security_event import Severity
 
-        bad_ip = "198.51.100.9"
+        bad_ip = "45.33.32.200"
         # The bad IP: three detections, dominated by endpoint scanning, and the
         # highest risk score on the board.
         _make_event(db, bad_ip, attack_type=AttackType.SUSPICIOUS_ENDPOINT, severity=Severity.CRITICAL)
@@ -389,8 +441,9 @@ def test_top_threats_ranks_by_risk_and_names_the_attack(client):
         db.add(RiskScore(user_id=None, source_ip=bad_ip, score=90, level=RiskLevel.CRITICAL, reasons="[]"))
 
         # A single lower-severity detection from a different host.
-        _make_event(db, "198.51.100.10", attack_type=AttackType.SUSPICIOUS_INPUT, severity=Severity.MEDIUM)
-        db.add(RiskScore(user_id=None, source_ip="198.51.100.10", score=30,
+        other_ip = "45.33.32.201"
+        _make_event(db, other_ip, attack_type=AttackType.SUSPICIOUS_INPUT, severity=Severity.MEDIUM)
+        db.add(RiskScore(user_id=None, source_ip=other_ip, score=30,
                          level=RiskLevel.MEDIUM, reasons="[]"))
         db.commit()
     finally:
@@ -399,14 +452,14 @@ def test_top_threats_ranks_by_risk_and_names_the_attack(client):
     resp = client.get("/api/security/threats/top", headers=headers)
     assert resp.status_code == 200
     rows = resp.json()
-    assert rows[0]["source_ip"] == "198.51.100.9"
+    assert rows[0]["source_ip"] == bad_ip
     assert rows[0]["risk_score"] == 90
     assert rows[0]["risk_level"] == "CRITICAL"
     assert rows[0]["dominant_attack_type"] == "SUSPICIOUS_ENDPOINT"
     assert rows[0]["event_count"] == 3
     assert rows[0]["attacks"]["SUSPICIOUS_ENDPOINT"] == 2
     assert rows[0]["is_blocked"] is False
-    assert rows[1]["source_ip"] == "198.51.100.10"
+    assert rows[1]["source_ip"] == other_ip
 
 
 def test_top_threats_reflects_the_response_already_taken(client):
