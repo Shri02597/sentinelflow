@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { getBlocked, raiseResponse, releaseTarget } from '../../services/api.js'
 import { Button } from '../../components/ui.jsx'
+import { apiErrorMessage } from '../../lib/apiError.js'
 import Icon from '../../components/Icon.jsx'
 
 /**
@@ -53,7 +54,7 @@ export default function ResponsePanel({ event, onChanged }) {
       await loadState()
       onChanged?.()
     } catch (e) {
-      setError(e?.response?.data?.detail || 'That action failed.')
+      setError(apiErrorMessage(e, 'That action failed.'))
     } finally {
       setBusy(null)
     }

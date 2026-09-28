@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
+import { apiErrorMessage } from '../../lib/apiError.js'
 import Icon from '../../components/Icon.jsx'
 
 /**
@@ -108,7 +109,7 @@ export function Login() {
       const me = await login(email, password)
       navigate(me.role === 'USER' ? '/home' : '/security')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Login failed')
+      setError(apiErrorMessage(err, 'Login failed'))
     } finally {
       setBusy(false)
     }
@@ -146,10 +147,11 @@ export function Register() {
     setError('')
     setBusy(true)
     try {
-      await register(form)
+      // AuthContext.register takes positional args, not the form object.
+      await register(form.email, form.username, form.password)
       navigate('/home')
     } catch (err) {
-      setError(err.response?.data?.detail || 'Registration failed')
+      setError(apiErrorMessage(err, 'Registration failed'))
     } finally {
       setBusy(false)
     }
@@ -165,9 +167,12 @@ export function Register() {
       buttonLabel="Create account"
       footer={<>Already registered? <Link to="/login" className="link font-semibold">Sign in</Link></>}
     >
-      <Field label="Username" icon="user" placeholder="shopper" value={form.username} onChange={set('username')} required autoComplete="username" />
+      <Field label="Username" icon="user" placeholder="shopper" value={form.username} onChange={set('username')} required minLength={3} maxLength={100} autoComplete="username" />
       <Field label="Email" icon="globe" type="email" placeholder="you@example.com" value={form.email} onChange={set('email')} required autoComplete="email" />
-      <Field label="Password" icon="key" type="password" placeholder="••••••••" value={form.password} onChange={set('password')} required autoComplete="new-password" />
+      <Field label="Password" icon="key" type="password" placeholder="At least 8 characters" value={form.password} onChange={set('password')} required minLength={8} maxLength={128} autoComplete="new-password" />
+      <p className="text-2xs leading-relaxed text-slate-600">
+        Passwords must be at least 8 characters and usernames at least 3 — the API enforces both.
+      </p>
     </Frame>
   )
 }
