@@ -38,7 +38,7 @@ export default function SecurityDashboard() {
   const [error, setError] = useState(null)
   const [lastLoadedAt, setLastLoadedAt] = useState(null)
 
-  const { subscribe, pollTick } = useLiveFeed()
+  const { subscribe, pollTick, status } = useLiveFeed()
   const lastRefetchRef = useRef(0)
   const pendingRefetchRef = useRef(null)
 
@@ -115,7 +115,7 @@ export default function SecurityDashboard() {
       <SectionHeader
         title="Security Operations"
         subtitle="Live detection across ShopFlow — every request scored as it happens"
-        actions={<ConnectionStatus lastLoadedAt={lastLoadedAt} />}
+        actions={        <ConnectionStatus status={status} lastLoadedAt={lastLoadedAt} />}
       />
 
       {error && (

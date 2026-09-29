@@ -1,5 +1,6 @@
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext.jsx'
+import { useLiveFeed } from '../context/LiveFeedContext.jsx'
 import ConnectionStatus from '../components/ConnectionStatus.jsx'
 import Icon from '../components/Icon.jsx'
 
@@ -22,6 +23,7 @@ const NAV_BY_ROLE = {
 
 export default function SentinelLayout() {
   const { user, logout } = useAuth()
+  const { status } = useLiveFeed()
   const location = useLocation()
   const nav = NAV_BY_ROLE[user?.role] || NAV_BY_ROLE.ANALYST
 
@@ -63,7 +65,7 @@ export default function SentinelLayout() {
         </nav>
 
         <div className="p-3 border-t border-line space-y-3 shrink-0">
-          <ConnectionStatus />
+          <ConnectionStatus status={status} />
           <Link
             to="/home"
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs text-slate-500 hover:text-accent hover:bg-bg-raised transition"
