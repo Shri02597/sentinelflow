@@ -150,6 +150,39 @@ def test_analyst_console_stays_reachable_from_a_blocked_ip(client):
     assert client.get("/api/security/response/blocked", headers={**headers, **ATTACKER_HEADERS}).status_code == 200
 
 
+def test_a_blocked_ip_can_still_authenticate_so_it_can_undo_its_own_block(client):
+    """
+    Regression: enforcement used to cover /api/auth, which made containment
+    self-trapping. A blocked IP got 403 at login, so it could never obtain a
+    token, so it could never reach the analyst console to release itself -- and
+    neither could the analyst, who was locked out of the same machine. The
+    escape hatch has to exist for a block to be a control rather than an
+    outage. Brute force is still bounded by the login rate limit.
+    """
+    analyst_headers = _analyst_headers(client)
+    db = SessionLocal()
+    event_id = _make_event(db, ATTACKER_IP).id
+    db.close()
+
+    client.post(
+        "/api/security/response", json={"event_id": event_id, "action": "BLOCK"}, headers=analyst_headers
+    )
+
+    # The blocked host is still stopped from the storefront...
+    assert client.get("/api/products", headers=ATTACKER_HEADERS).status_code == 403
+    # ...but can still obtain a token, which is what makes release possible.
+    token = client.post(
+        "/api/auth/login",
+        json={"email": "analyst@example.com", "password": "Passw0rd123"},
+        headers=ATTACKER_HEADERS,
+    )
+    assert token.status_code == 200
+    assert client.get(
+        "/api/security/response/blocked",
+        headers={**ATTACKER_HEADERS, "Authorization": f"Bearer {token.json()['access_token']}"},
+    ).status_code == 200
+
+
 def test_blocked_account_cannot_use_the_api(client):
     """Blocking by account locks that account out regardless of source IP."""
     analyst_headers = _analyst_headers(client)

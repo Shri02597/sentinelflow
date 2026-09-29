@@ -75,8 +75,13 @@ class Settings(BaseSettings):
     # Enforcement middleware. Blocked subjects get a 403 on these prefixes
     # unless the caller is an ANALYST/ADMIN, who are never locked out of the
     # console that would let them undo the block.
+    # /api/auth is exempt on purpose. Containment blocks *storefront* access; it
+    # is not meant to prevent login attempts, and rate limiting already caps
+    # those (RATE_LIMIT_LOGIN_PER_MINUTE). Blocking it here would be a lockout
+    # with no exit: a blocked IP could not authenticate, so it could never reach
+    # the analyst console to release itself, and neither could the analyst.
     ENFORCEMENT_EXEMPT_PREFIXES: str = (
-        "/api/health,/docs,/openapi.json,/redoc,/api/security,/api/admin,/ws"
+        "/api/health,/docs,/openapi.json,/redoc,/api/security,/api/admin,/api/auth,/ws"
     )
 
     # --- Rate limiting (sensitive endpoints) ---
