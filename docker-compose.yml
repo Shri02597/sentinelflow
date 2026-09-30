@@ -36,16 +36,19 @@ services:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      # Vite inlines these into the bundle at build time, so they have to be
+      # build args. Setting them as `environment:` would do nothing — the static
+      # bundle is already built by the time the container starts.
+      args:
+        VITE_API_URL: http://localhost:8000
+        VITE_WS_URL: ws://localhost:8000
     restart: unless-stopped
     depends_on:
       - backend
-    environment:
-      VITE_API_URL: http://localhost:8000
-      VITE_WS_URL: ws://localhost:8000
     ports:
       - "5173:5173"
-    command: npm run dev -- --host
 
 volumes:
   sentinelflow_db_data:

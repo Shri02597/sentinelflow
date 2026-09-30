@@ -31,12 +31,52 @@ const TOOLTIP = {
   cursor: { fill: 'rgba(148,163,184,0.06)' },
 }
 
+const DASHBOARD_CACHE_KEY = 'sf_cache:dashboard'
+
+/**
+ * The dashboard's last known good snapshot, kept so a network that dies mid-demo
+ * degrades to "old numbers, clearly labelled" instead of a blank grid.
+ */
+function readDashboardCache() {
+  if (typeof localStorage === 'undefined') return null
+  try {
+    const raw = localStorage.getItem(DASHBOARD_CACHE_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw)
+    if (!parsed || typeof parsed.savedAt !== 'number') return null
+    return parsed
+  } catch {
+    return null
+  }
+}
+
+function writeDashboardCache(snapshot) {
+  if (typeof localStorage === 'undefined') return
+  try {
+    localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), ...snapshot }))
+  } catch {
+    // Quota or private mode. Caching is an enhancement, never a reason to fail.
+  }
+}
+
 export default function SecurityDashboard() {
-  const [stats, setStats] = useState(null)
-  const [traffic, setTraffic] = useState([])
-  const [liveEvents, setLiveEvents] = useState([])
+  const initial = useRef(null)
+  if (initial.current === null) initial.current = readDashboardCache()
+
+  const [stats, setStats] = useState(initial.current?.stats ?? null)
+  const [traffic, setTraffic] = useState(initial.current?.traffic ?? [])
+  const [liveEvents, setLiveEvents] = useState(initial.current?.liveEvents ?? [])
   const [error, setError] = useState(null)
-  const [lastLoadedAt, setLastLoadedAt] = useState(null)
+  const [stale, setStale] = useState(initial.current != null)
+  const [lastLoadedAt, setLastLoadedAt] = useState(initial.current?.savedAt ?? null)
+
+  // Mirrors the rendered state so a failed refresh can still tell what was
+  // last good without depending on state having flushed.
+  const snapshotRef = useRef({
+    stats: initial.current?.stats ?? null,
+    traffic: initial.current?.traffic ?? [],
+    liveEvents: initial.current?.liveEvents ?? [],
+  })
 
   const { subscribe, pollTick, status } = useLiveFeed()
   const lastRefetchRef = useRef(0)
@@ -58,18 +98,43 @@ export default function SecurityDashboard() {
     const failures = []
     if (s.status === 'fulfilled') setStats(s.value.data)
     else failures.push('stats')
+
+    let mappedTraffic = snapshotRef.current.traffic
     if (t.status === 'fulfilled') {
-      setTraffic(t.value.data.map((p) => ({ time: new Date(p.bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), count: p.request_count })))
+      mappedTraffic = t.value.data.map((p) => ({
+        time: new Date(p.bucket).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        count: p.request_count,
+      }))
+      setTraffic(mappedTraffic)
     } else failures.push('traffic')
+
     if (e.status === 'fulfilled') setLiveEvents(e.value.data)
     else failures.push('events')
 
-    // Only surface an error if *nothing* came back; partial data with a
-    // warning is more useful than an error page.
-    if (failures.length === 3) setError('Could not reach the security API.')
-    else setError(null)
+    // On failure, keep whatever is already on screen. Blanking the console
+    // because one refresh didn't land is the difference between "the network is
+    // flaky" and "there's nothing to see" — and on a security dashboard those
+    // two read identically, which is the dangerous one.
+    snapshotRef.current = {
+      stats: s.status === 'fulfilled' ? s.value.data : snapshotRef.current.stats,
+      traffic: mappedTraffic,
+      liveEvents: e.status === 'fulfilled' ? e.value.data : snapshotRef.current.liveEvents,
+    }
 
-    setLastLoadedAt(Date.now())
+    if (failures.length === 3) {
+      setError('Could not reach the security API.')
+      setStale(true)
+    } else {
+      setError(null)
+      if (failures.length === 0) setStale(false)
+    }
+
+    if (failures.length === 0) {
+      writeDashboardCache(snapshotRef.current)
+      setLastLoadedAt(Date.now())
+    }
+
+    return failures.length
   }, [])
 
   useEffect(() => { loadAll() }, [loadAll])
@@ -82,7 +147,11 @@ export default function SecurityDashboard() {
   // and coalesce the (relatively expensive) stats refetch behind it.
   useEffect(() => subscribe((msg) => {
     if (msg.type === 'security_event') {
-      setLiveEvents((prev) => [msg.data, ...prev].slice(0, 30))
+      setLiveEvents((prev) => {
+        const next = [msg.data, ...prev].slice(0, 30)
+        snapshotRef.current.liveEvents = next
+        return next
+      })
 
       const now = Date.now()
       const since = now - lastRefetchRef.current
@@ -103,19 +172,25 @@ export default function SecurityDashboard() {
     if (pendingRefetchRef.current) clearTimeout(pendingRefetchRef.current)
   }, [])
 
-  const attackData = stats
-    ? Object.entries(stats.events_by_attack_type).map(([k, v]) => ({ name: k.replaceAll('_', ' ').toLowerCase(), count: v }))
-    : []
-  const severityData = stats
-    ? Object.entries(stats.events_by_severity).map(([k, v]) => ({ name: k, count: v, fill: SEVERITY_COLORS[k] }))
-    : []
+  // `stats` can legitimately arrive as `{}` — an empty aggregate is a valid
+  // response, not just a missing one. Reading through a guard keeps a partial
+  // payload from throwing during render, which would blank the whole page.
+  const attackData = Object.entries(stats?.events_by_attack_type ?? {}).map(([k, v]) => ({
+    name: k.replaceAll('_', ' ').toLowerCase(),
+    count: v,
+  }))
+  const severityData = Object.entries(stats?.events_by_severity ?? {}).map(([k, v]) => ({
+    name: k,
+    count: v,
+    fill: SEVERITY_COLORS[k],
+  }))
 
   return (
     <div className="p-6 lg:p-8 max-w-[1400px]">
       <SectionHeader
         title="Security Operations"
         subtitle="Live detection across ShopFlow — every request scored as it happens"
-        actions={        <ConnectionStatus status={status} lastLoadedAt={lastLoadedAt} />}
+        actions={        <ConnectionStatus status={stale ? 'stale' : status} lastLoadedAt={lastLoadedAt} />}
       />
 
       {error && (
@@ -127,6 +202,16 @@ export default function SecurityDashboard() {
           <button onClick={loadAll} className="btn btn-danger btn-sm shrink-0">
             <Icon name="refresh" size={12} />Retry
           </button>
+        </div>
+      )}
+
+      {stale && (
+        <div className="mb-5 flex items-center gap-2.5 rounded-lg border border-severity-medium/30 bg-severity-medium/8 px-4 py-3">
+          <Icon name="clock" size={15} className="text-severity-medium shrink-0" />
+          <span className="text-xs text-severity-medium">
+            Showing the last data this dashboard successfully loaded — these figures
+            may be out of date.
+          </span>
         </div>
       )}
 

@@ -29,17 +29,37 @@ export function AuthProvider({ children }) {
 
   async function login(email, password) {
     const res = await loginUser({ email, password })
-    localStorage.setItem('sf_access_token', res.data.access_token)
-    localStorage.setItem('sf_refresh_token', res.data.refresh_token)
-    const me = await getMe()
-    setUser(me.data)
-    localStorage.setItem('sf_user', JSON.stringify(me.data))
-    return me.data
+    const { access_token, refresh_token, user: profile } = res.data
+    localStorage.setItem('sf_access_token', access_token)
+    localStorage.setItem('sf_refresh_token', refresh_token)
+
+    // The server already had the profile in hand, so there is no reason to spend
+    // another round trip asking for it. Fall back to /me only against an older
+    // backend that doesn't return the user inline.
+    let resolved = profile
+    if (!resolved) {
+      const me = await getMe()
+      resolved = me.data
+    }
+
+    setUser(resolved)
+    localStorage.setItem('sf_user', JSON.stringify(resolved))
+    return resolved
   }
 
   async function register(email, username, password) {
-    await registerUser({ email, username, password })
-    return login(email, password)
+    const res = await registerUser({ email, username, password })
+    // The API signs the new account in as part of registration. Falling back to
+    // a separate login call only matters if a deployment returns the bare user.
+    const token = res.data.access_token
+    if (!token) return login(email, password)
+
+    localStorage.setItem('sf_access_token', token)
+    localStorage.setItem('sf_refresh_token', res.data.refresh_token)
+    const { access_token, refresh_token, ...profile } = res.data
+    localStorage.setItem('sf_user', JSON.stringify(profile))
+    setUser(profile)
+    return profile
   }
 
   function logout() {

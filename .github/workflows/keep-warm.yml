@@ -1,0 +1,64 @@
+name: Keep Render warm
+
+# Render's free web service sleeps after ~15 minutes without traffic, and the
+# first request afterwards waits roughly 45 seconds for the container to boot.
+# That delay lands squarely on the person trying to log in during a demo.
+#
+# This pings the public health endpoint on a schedule so the instance is already
+# running when a real request arrives. It costs nothing: Git-hosted runners are
+# free, and a few hundred tiny requests a month won't move Render's free limits.
+#
+# Honest caveat: scheduled workflows are best-effort. GitHub can delay cron
+# jobs by minutes, sometimes longer on busy runs, and they are disabled
+# automatically after 60 days of repository inactivity. The browser-side warm-up
+# in `useKeepWarm.js` is the backstop for when this doesn't fire.
+on:
+  schedule:
+    # Every 8 minutes, off the hour to avoid the crowded top-of-hour slot.
+    - cron: "*/8 * * * *"
+  workflow_dispatch:
+
+# Nothing here needs a checkout — it's a single HTTP GET.
+permissions: {}
+
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    name: Ping health endpoint
+    runs-on: ubuntu-latest
+    # A ping should cost seconds, not minutes. A cold boot legitimately takes
+    # ~45s, so allow for one, but don't let a hung request burn the job.
+    timeout-minutes: 3
+    steps:
+      - name: Check the backend is awake
+        run: |
+          set -euo pipefail
+          URL="${BACKEND_HEALTH_URL}"
+
+          if [ -z "${URL:-}" ]; then
+            echo "::error::BACKEND_HEALTH_URL secret is not set. Add it under Settings > Secrets."
+            exit 1
+          fi
+
+          started=$(date +%s)
+          # --max-time fails rather than hanging if the platform is wedged.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 120 "$URL" || echo "000")
+          elapsed=$(( $(date +%s) - started ))
+
+          if [ "$code" = "200" ]; then
+            if [ "$elapsed" -gt 5 ]; then
+              echo "Awake, but slow: ${elapsed}s (the instance had been spun down)."
+            else
+              echo "Awake in ${elapsed}s."
+            fi
+          else
+            echo "::error::Health check returned HTTP ${code} after ${elapsed}s."
+            exit 1
+          fi
+
+      - name: Log health payload
+        if: always()
+        run: curl -sS --max-time 30 "${BACKEND_HEALTH_URL}" || true

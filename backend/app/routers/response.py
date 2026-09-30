@@ -16,7 +16,7 @@ block an account is strictly more powerful than the ability to read the feed.
 from datetime import datetime, timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -196,6 +196,7 @@ def list_response_actions(
 @router.post("/response", response_model=ResponseActionOut, status_code=201)
 def raise_response(
     payload: ResponseActionIn,
+    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: User = Depends(analyst_or_admin),
 ):
@@ -262,12 +263,17 @@ def raise_response(
     db.commit()
     db.refresh(action)
 
-    await_broadcast(action)
+    # Background task rather than a bare coroutine call: these endpoints are
+    # sync (so they run in a threadpool with no event loop to await on), and
+    # calling the coroutine without awaiting it discarded it silently — which
+    # is why containment decisions never reached an open dashboard.
+    background_tasks.add_task(broadcast_response_action, _response_action_payload(action))
     return action
 
 
 @router.post("/response/release", response_model=ResponseActionOut, status_code=201)
 def release_target(
+    background_tasks: BackgroundTasks,
     target_type: TargetType = Query(...),
     target_key: str = Query(...),
     reason: str = Query("Released by analyst."),
@@ -285,23 +291,21 @@ def release_target(
     )
     db.commit()
     db.refresh(action)
-    await_broadcast(action)
+    background_tasks.add_task(broadcast_response_action, _response_action_payload(action))
     return action
 
 
-async def await_broadcast(action: ResponseAction) -> None:
-    await broadcast_response_action(
-        {
-            "id": action.id,
-            "target_type": action.target_type.value,
-            "target_key": action.target_key,
-            "action": action.action.value,
-            "reason": action.reason,
-            "is_auto": action.is_auto,
-            "source_event_id": action.source_event_id,
-            "created_at": action.created_at.isoformat() if action.created_at else None,
-        }
-    )
+def _response_action_payload(action: ResponseAction) -> dict:
+    return {
+        "id": action.id,
+        "target_type": action.target_type.value,
+        "target_key": action.target_key,
+        "action": action.action.value,
+        "reason": action.reason,
+        "is_auto": action.is_auto,
+        "source_event_id": action.source_event_id,
+        "created_at": action.created_at.isoformat() if action.created_at else None,
+    }
 
 
 # --------------------------------------------------------------------------

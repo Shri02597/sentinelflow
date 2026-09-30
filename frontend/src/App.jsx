@@ -1,34 +1,49 @@
+import { lazy, Suspense } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import ProtectedRoute from './components/ProtectedRoute.jsx'
 import ShopLayout from './layouts/ShopLayout.jsx'
 import SentinelLayout from './layouts/SentinelLayout.jsx'
 
 import Landing from './pages/public/Landing.jsx'
-import Login from './pages/public/Login.jsx'
-import Register from './pages/public/Register.jsx'
 
-import Home from './pages/user/Home.jsx'
-import Search from './pages/user/Search.jsx'
-import Profile from './pages/user/Profile.jsx'
-import ActivityHistory from './pages/user/ActivityHistory.jsx'
+// Every route past the landing page is split out. The security screens pull in
+// recharts (and its d3 / victory-vendor tree, ~1000 modules); importing them
+// eagerly made the dev server transform that whole graph before it could paint
+// the login form, which is what made Register/Login feel like it hung.
+const Login = lazy(() => import('./pages/public/Login.jsx'))
+const Register = lazy(() => import('./pages/public/Register.jsx'))
 
-import ProductListing from './pages/shop/ProductListing.jsx'
-import ProductDetail from './pages/shop/ProductDetail.jsx'
-import Cart from './pages/shop/Cart.jsx'
+const Home = lazy(() => import('./pages/user/Home.jsx'))
+const Search = lazy(() => import('./pages/user/Search.jsx'))
+const Profile = lazy(() => import('./pages/user/Profile.jsx'))
+const ActivityHistory = lazy(() => import('./pages/user/ActivityHistory.jsx'))
 
-import SecurityDashboard from './pages/security/SecurityDashboard.jsx'
-import SecurityEvents from './pages/security/SecurityEvents.jsx'
-import ThreatDetails from './pages/security/ThreatDetails.jsx'
-import RiskyUsers from './pages/security/RiskyUsers.jsx'
-import UserRiskProfile from './pages/security/UserRiskProfile.jsx'
-import BlockedIdentities from './pages/security/BlockedIdentities.jsx'
+const ProductListing = lazy(() => import('./pages/shop/ProductListing.jsx'))
+const ProductDetail = lazy(() => import('./pages/shop/ProductDetail.jsx'))
+const Cart = lazy(() => import('./pages/shop/Cart.jsx'))
 
-import UserManagement from './pages/admin/UserManagement.jsx'
-import Settings from './pages/admin/Settings.jsx'
+const SecurityDashboard = lazy(() => import('./pages/security/SecurityDashboard.jsx'))
+const SecurityEvents = lazy(() => import('./pages/security/SecurityEvents.jsx'))
+const ThreatDetails = lazy(() => import('./pages/security/ThreatDetails.jsx'))
+const RiskyUsers = lazy(() => import('./pages/security/RiskyUsers.jsx'))
+const UserRiskProfile = lazy(() => import('./pages/security/UserRiskProfile.jsx'))
+const BlockedIdentities = lazy(() => import('./pages/security/BlockedIdentities.jsx'))
+
+const UserManagement = lazy(() => import('./pages/admin/UserManagement.jsx'))
+const Settings = lazy(() => import('./pages/admin/Settings.jsx'))
+
+function RouteFallback() {
+  return (
+    <div className="min-h-screen grid place-items-center bg-bg">
+      <span className="text-sm text-slate-500">Loading…</span>
+    </div>
+  )
+}
 
 export default function App() {
   return (
-    <Routes>
+    <Suspense fallback={<RouteFallback />}>
+      <Routes>
       {/* Public */}
       <Route path="/" element={<Landing />} />
       <Route path="/login" element={<Login />} />
@@ -62,6 +77,7 @@ export default function App() {
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+      </Routes>
+    </Suspense>
   )
 }

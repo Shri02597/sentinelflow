@@ -6,6 +6,7 @@ services:
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
     envVars:
       - key: DATABASE_URL
         fromDatabase:
@@ -23,10 +24,22 @@ services:
         value: production
       - key: DEBUG
         value: "false"
-      # Set these two after the frontend is deployed to Vercel — they're the
+      # bcrypt is intentionally slow. 10 rounds is the OWASP floor and is ~4x
+      # faster than 12, which is the difference between a ~360ms and a ~90ms
+      # login. Raise it if the demo isn't on a slow connection.
+      - key: BCRYPT_ROUNDS
+        value: "10"
+      # Seeding is idempotent but still costs queries on every boot. Against a
+      # managed Postgres the data is already there, so skip it — otherwise that
+      # latency lands on the first person to make a request.
+      - key: SEED_ON_STARTUP
+        value: "false"
+      # Set these two after the frontend is deployed to Vercel - they're the
       # only values Render can't know in advance (Blueprint deploy will pause
       # asking you to fill these in; you can also set them later and redeploy).
       - key: CORS_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
         sync: false
       - key: FRONTEND_URL
         sync: false

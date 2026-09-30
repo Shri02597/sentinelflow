@@ -33,7 +33,13 @@ def register(request: Request, payload: UserRegister, db: Session = Depends(get_
     db.add(user)
     db.commit()
     db.refresh(user)
-    return user
+
+    # Return a token pair alongside the new account so the client doesn't have to
+    # immediately re-submit the password just to log in.
+    return UserOut.model_validate(user).model_copy(update={
+        "access_token": create_access_token(user.id, user.role.value),
+        "refresh_token": create_refresh_token(user.id, user.role.value),
+    })
 
 
 @router.post("/login", response_model=TokenPair)
@@ -54,9 +60,12 @@ def login(request: Request, payload: UserLogin, db: Session = Depends(get_db)):
     user.last_login_at = datetime.utcnow()
     db.commit()
 
+    # The user object is returned alongside the tokens so the client can route
+    # straight to the right console without a follow-up /me call.
     return TokenPair(
         access_token=create_access_token(user.id, user.role.value),
         refresh_token=create_refresh_token(user.id, user.role.value),
+        user=UserOut.model_validate(user),
     )
 
 

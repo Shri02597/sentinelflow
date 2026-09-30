@@ -13,6 +13,11 @@ const STATES = {
   'auth-failed': { label: 'Session expired', tone: 'text-severity-critical', dot: 'bg-severity-critical', ring: 'border-severity-critical/25 bg-severity-critical/10' },
   // ShopFlow users never open a socket — LiveFeedProvider hands them IDLE_VALUE.
   idle: { label: 'Idle', tone: 'text-slate-400', dot: 'bg-slate-500', ring: 'border-line bg-bg-raised' },
+  // The socket may be perfectly healthy while the REST reads behind these
+  // numbers have stopped landing. Shown when what you're looking at came from
+  // cache or a failed refresh — the screen is usable, but it is not current,
+  // and on a security console that distinction has to be explicit.
+  stale: { label: 'Stale data', tone: 'text-severity-medium', dot: 'bg-severity-medium', ring: 'border-severity-medium/25 bg-severity-medium/10' },
 }
 
 function timeAgo(ts) {

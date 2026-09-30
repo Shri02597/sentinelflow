@@ -41,6 +41,7 @@ const PATHS = {
   bell: <><path d="M18 9a6 6 0 1 0-12 0c0 5-2 6.5-2 6.5h16S18 14 18 9z" {...P} /><path d="M13.7 19a2 2 0 0 1-3.4 0" {...P} /></>,
   package: <><path d="M12 2.8l8.5 4.4v9.6L12 21.2 3.5 16.8V7.2L12 2.8z" {...P} /><path d="M3.7 7.1L12 11.5l8.3-4.4M12 11.5V21" {...P} /></>,
   menu: <><path d="M4 7h16M4 12h16M4 17h16" {...P} /></>,
+  clock: <><circle cx="12" cy="12" r="9" {...P} /><path d="M12 7.5V12l3 1.8" {...P} /></>,
 }
 
 export default function Icon({ name, size = 16, className = '' }) {

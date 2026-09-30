@@ -22,6 +22,11 @@ class UserOut(BaseModel):
     role: UserRole
     is_active: bool
     created_at: datetime
+    # Populated only by /register. Signing the user in as part of registration
+    # saves a second bcrypt verification plus a round trip, which is the bulk
+    # of the wait on the register form.
+    access_token: str | None = None
+    refresh_token: str | None = None
 
     class Config:
         from_attributes = True
@@ -31,6 +36,11 @@ class TokenPair(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    # Populated by /login. The client used to call /me immediately afterwards
+    # just to learn the role that decides which console to render — a second
+    # round trip for data the server already had in hand. Optional so refresh
+    # responses and existing clients are unaffected.
+    user: UserOut | None = None
 
 
 class TokenPayload(BaseModel):

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext.jsx'
 import { apiErrorMessage } from '../../lib/apiError.js'
@@ -9,6 +9,22 @@ import Icon from '../../components/Icon.jsx'
  * pitch collapses, because a 200-word manifesto above a login box is a wall.
  */
 function Frame({ title, subtitle, error, children, footer, busy, onSubmit, buttonLabel }) {
+  // A submitted request that has been slow this long is almost certainly the
+  // backend waking up rather than a wrong password, so say something different
+  // from the generic in-flight label.
+  const [slow, setSlow] = useState(false)
+
+  useEffect(() => {
+    if (!busy) {
+      setSlow(false)
+      return
+    }
+    const id = setTimeout(() => setSlow(true), 8000)
+    return () => clearTimeout(id)
+  }, [busy])
+
+  const submitLabel = slow ? 'Still trying — hold on…' : 'Please wait…'
+
   return (
     <div className="min-h-screen bg-bg lg:grid lg:grid-cols-2">
       <div className="relative hidden lg:flex flex-col justify-between p-10 bg-bg-sunken overflow-hidden">
@@ -70,9 +86,16 @@ function Frame({ title, subtitle, error, children, footer, busy, onSubmit, butto
           <div className="mt-6 space-y-4">{children}</div>
 
           <button disabled={busy} className="btn btn-primary w-full mt-6">
-            {busy ? 'Please wait…' : buttonLabel}
+            {busy ? submitLabel : buttonLabel}
             {!busy && <Icon name="arrow" size={15} />}
           </button>
+
+          {busy && (
+            <p className="mt-2.5 text-center text-2xs text-slate-600">
+              Taking longer than usual? The backend may be restarting — this usually
+              clears within a minute.
+            </p>
+          )}
 
           <div className="mt-5 text-center text-xs text-slate-500">{footer}</div>
         </form>

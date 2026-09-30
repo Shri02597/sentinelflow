@@ -36,5 +36,17 @@ export function apiErrorMessage(err, fallback = 'Something went wrong.') {
 
   if (err?.response?.status === 422) return 'Please check the form and try again.'
 
+  // Transport failures arrive with no `response` at all. Without these branches
+  // they fall through to the caller's generic fallback, so a dead network and a
+  // wrong password both read as "Login failed" — which sends the user hunting
+  // for a typo instead of telling them the machine is offline.
+  if (err?.code === 'ECONNABORTED' || err?.code === 'ETIMEDOUT') {
+    return 'The server took too long to respond. It may be starting up — please try again.'
+  }
+
+  if (err?.request && !err?.response) {
+    return "Can't reach the server. Check your internet connection and try again."
+  }
+
   return fallback
 }
